@@ -1,0 +1,56 @@
+/* Single source for color, type, and motion values used by the pages and
+   the 3D hero. The spectral ramp doubles as the site's data legend: an
+   impact index in [0,1] maps low to high through these six stops. The
+   Three.js module keeps its own copy of the stops as floats; if the ramp
+   ever changes, change it in both places. */
+
+:root {
+  --ramp-0: #6a5cff;
+  --ramp-1: #22b7ff;
+  --ramp-2: #1fd6a8;
+  --ramp-3: #c6e84f;
+  --ramp-4: #ff8a3d;
+  --ramp-5: #ff4d7d;
+  --grad-spectral: linear-gradient(
+    100deg,
+    var(--ramp-0) 0%,
+    var(--ramp-1) 28%,
+    var(--ramp-2) 52%,
+    var(--ramp-3) 72%,
+    var(--ramp-4) 88%,
+    var(--ramp-5) 100%
+  );
+
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-sans: 'Space Grotesk Variable', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 200ms;
+  --dur-reveal: 550ms;
+}
+
+/* Both themes are first class. data-theme is resolved before first paint
+   by the boot script in the base layout, then switched by the toggle. */
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #06070c;
+  --ink: #f3f5fa;
+  --muted: #9aa3b2;
+  --panel: rgba(6, 7, 12, 0.72);
+  --panel-soft: rgba(6, 7, 12, 0.28);
+  --accent: #8fd6ff;
+  --line: #232a3a;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef1f6;
+  --ink: #14161d;
+  --muted: #4c5564;
+  --panel: rgba(244, 246, 250, 0.82);
+  --panel-soft: rgba(244, 246, 250, 0.45);
+  --accent: #2b6f8f;
+  --line: #ccd3de;
+}

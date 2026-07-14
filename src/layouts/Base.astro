@@ -1,0 +1,46 @@
+---
+// Document shell shared by every page: fonts, global styles, and the
+// pre-paint theme resolution. Fraunces loads with its optical size axis
+// so the same file serves text and display sizes.
+import '@fontsource-variable/fraunces/opsz.css';
+import '@fontsource-variable/space-grotesk';
+import '@fontsource/ibm-plex-mono/400.css';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Payam Madelat, Early Stage Researcher at Tallinn University of Technology.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <script is:inline>
+      // Resolve the theme before first paint so neither mode flashes.
+      (function () {
+        var saved = localStorage.getItem('theme');
+        var theme =
+          saved === 'light' || saved === 'dark'
+            ? saved
+            : matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

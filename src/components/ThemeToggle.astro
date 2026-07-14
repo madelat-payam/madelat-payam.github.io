@@ -1,0 +1,50 @@
+---
+// User-controlled dark/light switch. The scroll-driven section rhythm in
+// the hero runs inside whichever theme the visitor picks here.
+---
+
+<button id="theme-toggle" type="button" aria-label="Switch color theme">
+  <span aria-hidden="true"></span>
+</button>
+
+<style>
+  button {
+    inline-size: 40px;
+    block-size: 40px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--panel);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: border-color var(--dur-micro) var(--ease-out);
+  }
+
+  button:hover {
+    border-color: var(--accent);
+  }
+
+  /* A disc that reads as sun in light mode and moon in dark mode. */
+  span {
+    inline-size: 16px;
+    block-size: 16px;
+    border-radius: 50%;
+    background: var(--ink);
+    transition: clip-path var(--dur-micro) var(--ease-out);
+  }
+
+  :global([data-theme='dark']) span {
+    clip-path: circle(70% at 30% 30%);
+  }
+</style>
+
+<script>
+  const button = document.getElementById('theme-toggle');
+
+  button?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    localStorage.setItem('theme', next);
+  });
+</script>

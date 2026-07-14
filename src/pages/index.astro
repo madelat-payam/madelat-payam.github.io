@@ -1,0 +1,59 @@
+---
+// Placeholder home page. The immersive city hero replaces this main block
+// in the next build phase; the layout, tokens, and toggle are permanent.
+import Base from '../layouts/Base.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+---
+
+<Base title="Payam Madelat">
+  <header>
+    <span class="name">Payam Madelat</span>
+    <ThemeToggle />
+  </header>
+  <main>
+    <h1>Early Stage Researcher</h1>
+    <p>
+      Tallinn University of Technology, Department of Civil Engineering and
+      Architecture. The full site is under construction.
+    </p>
+    <p class="legend" aria-hidden="true"></p>
+  </main>
+</Base>
+
+<style>
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+  }
+
+  .name {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 600;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 18vh 24px 0;
+  }
+
+  h1 {
+    font-size: clamp(42px, 7vw, 84px);
+  }
+
+  p {
+    color: var(--muted);
+    max-width: 52ch;
+  }
+
+  /* Temporary swatch proving the spectral ramp tokens resolve. */
+  .legend {
+    block-size: 6px;
+    max-width: 280px;
+    border-radius: 3px;
+    background: var(--grad-spectral);
+  }
+</style>
