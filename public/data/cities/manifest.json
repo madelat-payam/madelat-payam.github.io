@@ -1,0 +1,117 @@
+{
+  "n": 2400,
+  "stride": 9,
+  "fields": [
+    "x",
+    "z",
+    "w",
+    "d",
+    "angle",
+    "height",
+    "area",
+    "floors",
+    "cls"
+  ],
+  "classes": {
+    "0": "other",
+    "1": "residential_single",
+    "2": "residential_multi",
+    "3": "office",
+    "4": "commercial",
+    "5": "industrial",
+    "6": "education",
+    "7": "civic"
+  },
+  "cities": [
+    {
+      "slot": "c0",
+      "file": "c0.bin",
+      "count": 2400,
+      "raw_count": 7405,
+      "radius_m": 2221.1,
+      "maxHeight_m": 80.0,
+      "classes": {
+        "other": 1331,
+        "residential_single": 109,
+        "residential_multi": 737,
+        "office": 38,
+        "commercial": 85,
+        "industrial": 35,
+        "education": 34,
+        "civic": 31
+      }
+    },
+    {
+      "slot": "c1",
+      "file": "c1.bin",
+      "count": 2400,
+      "raw_count": 9014,
+      "radius_m": 1928.0,
+      "maxHeight_m": 64.0,
+      "classes": {
+        "other": 1025,
+        "residential_single": 79,
+        "residential_multi": 1146,
+        "office": 23,
+        "commercial": 65,
+        "industrial": 18,
+        "education": 28,
+        "civic": 16
+      }
+    },
+    {
+      "slot": "c2",
+      "file": "c2.bin",
+      "count": 2400,
+      "raw_count": 10592,
+      "radius_m": 2507.8,
+      "maxHeight_m": 54.4,
+      "classes": {
+        "other": 1279,
+        "residential_single": 124,
+        "residential_multi": 822,
+        "office": 56,
+        "commercial": 28,
+        "industrial": 27,
+        "education": 40,
+        "civic": 24
+      }
+    },
+    {
+      "slot": "c3",
+      "file": "c3.bin",
+      "count": 2400,
+      "raw_count": 9225,
+      "radius_m": 1891.5,
+      "maxHeight_m": 200.0,
+      "classes": {
+        "other": 1024,
+        "residential_single": 23,
+        "residential_multi": 1079,
+        "office": 117,
+        "commercial": 102,
+        "industrial": 7,
+        "education": 32,
+        "civic": 16
+      }
+    },
+    {
+      "slot": "c4",
+      "file": "c4.bin",
+      "count": 2400,
+      "raw_count": 32695,
+      "radius_m": 5051.2,
+      "maxHeight_m": 236.2,
+      "classes": {
+        "other": 1891,
+        "residential_single": 7,
+        "residential_multi": 395,
+        "office": 19,
+        "commercial": 46,
+        "industrial": 2,
+        "education": 19,
+        "civic": 21
+      }
+    }
+  ]
+}

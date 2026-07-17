@@ -1,59 +1,719 @@
 ---
-// Placeholder home page. The immersive city hero replaces this main block
-// in the next build phase; the layout, tokens, and toggle are permanent.
+// Home page. A fixed WebGL canvas holds the morphing city; the content scrolls
+// over it, and its scroll progress drives the morph. A small control cluster
+// lets a visitor choose what the building color encodes and which palette draws
+// it, with a legend. Copy follows academic-writing-style.md; facts come from
+// the two CV sources in the project. Venue cities stay out of the publication
+// rows by Payam's decision; the Tallinn in one paper title is the real title.
+// Headlines are Payam's chosen set (system A, 2026-07-16); the H1 wording is
+// his own line, set verbatim.
 import Base from '../layouts/Base.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
+
+const publications = [
+  {
+    year: '2026',
+    title: 'A streamlined method to integrate LCA in early-stages design employing a parametric framework',
+    venue: 'Architectural Science Review',
+    kind: 'journal',
+  },
+  {
+    year: '2025',
+    title: 'A computational workflow to analyze simplified metrics of environmental building performance in a northern climate',
+    venue: 'Journal of Physics: Conference Series (CISBAT 2025)',
+    kind: 'paper',
+  },
+  {
+    year: '2025',
+    title: 'Beyond carbon footprint: a parametric tool for early-stage multi-impact life cycle assessment in building design',
+    venue: 'Proceedings of the 43rd eCAADe',
+    kind: 'paper',
+  },
+  {
+    year: '2025',
+    title: 'Wind analysis methods to improve pedestrian comfort in urban design. A case study in Tallinn, Estonia',
+    venue: 'Proceedings of the 43rd eCAADe',
+    kind: 'paper',
+  },
+  {
+    year: '2024',
+    title: 'A novel parametric method for assessing view towards green in the early stages of urban design',
+    venue: 'Proceedings of the 42nd eCAADe',
+    kind: 'paper',
+  },
+  {
+    year: '2023',
+    title: 'Early design clustering method considering equitable daylight distribution in the adaptive re-use of heritage buildings',
+    venue: 'Proceedings of the 41st eCAADe',
+    kind: 'paper',
+  },
+];
+
+const links = [
+  { label: 'Email', href: 'mailto:payam.madelat@taltech.ee' },
+  { label: 'ORCID', href: 'https://orcid.org/0009-0007-3109-5988' },
+  { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=4GzU9WAAAAAJ' },
+  { label: 'GitHub', href: 'https://github.com/madelat-payam' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/payam-madelat-32513a144' },
+];
 ---
 
-<Base title="Payam Madelat">
-  <header>
+<Base
+  title="Payam Madelat, Early Stage Researcher at TalTech"
+  description="Payam Madelat is an Early Stage Researcher at Tallinn University of Technology developing computational and data-driven methods to assess and reduce the environmental impact of buildings and cities."
+>
+  <canvas id="scene"></canvas>
+
+  <header class="bar">
     <span class="name">Payam Madelat</span>
-    <ThemeToggle />
+    <div class="bar-right">
+      <nav>
+        <a href="#approach">Approach</a>
+        <a href="#work">Work</a>
+        <a href="#about">About</a>
+        <a href="#contact">Contact</a>
+        <a href="/cv">CV</a>
+      </nav>
+      <ThemeToggle />
+    </div>
   </header>
-  <main>
-    <h1>Early Stage Researcher</h1>
-    <p>
-      Tallinn University of Technology, Department of Civil Engineering and
-      Architecture. The full site is under construction.
-    </p>
-    <p class="legend" aria-hidden="true"></p>
-  </main>
+
+  <!-- Populated by the hero once its data loads; stays empty (and out of the way)
+       if scripting is off, since the canvas needs scripting anyway. -->
+  <aside id="hero-ui" class="hero-ui" hidden>
+    <div class="ctl">
+      <span class="ctl-label" id="metric-label">Color by</span>
+      <div class="seg" role="radiogroup" aria-labelledby="metric-label" id="metric-group"></div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-head">
+        <span class="legend-title" id="legend-title"></span>
+        <span class="legend-scale" id="legend-scale"></span>
+      </div>
+      <div class="legend-bar" id="legend-bar"></div>
+      <div class="legend-ticks" id="legend-ticks"></div>
+      <p class="legend-note" id="legend-note"></p>
+    </div>
+
+    <div class="ctl">
+      <span class="ctl-label" id="palette-label">Palette</span>
+      <div class="swatches" role="radiogroup" aria-labelledby="palette-label" id="palette-group"></div>
+    </div>
+  </aside>
+
+  <div id="content" class="content">
+    <section id="hero" class="section">
+      <div class="panel">
+        <p class="eyebrow">Early Stage Researcher, TalTech</p>
+        <h1>Computational methods for<br /><span class="grad">environmentally aware</span><br />building and city design.</h1>
+        <p class="lede">
+          I develop parametric and data-driven workflows that bring quantified environmental
+          evidence into the earliest stages of design, from a single building to the urban
+          scale.
+        </p>
+        <div class="meta">
+          <div><span class="k">Base</span><span class="v">TalTech, Tallinn</span></div>
+          <div><span class="k">Builds with</span><span class="v">Python, C#, Grasshopper</span></div>
+          <div><span class="k">Focus</span><span class="v">Environmental impacts, building to city</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="approach" class="section">
+      <div class="panel">
+        <p class="eyebrow">The approach</p>
+        <h2>Impacts measured where design begins.</h2>
+        <p class="lede">
+          The city behind this text is colored by a measure you can choose: a first-order
+          embodied-carbon estimate, gross floor area, or height, each read as a relative scale,
+          lower to higher, against its own legend. The research follows the same principle with
+          full rigor: impact assessment joined directly to parametric geometry.
+        </p>
+        <div class="cards">
+          <div class="card"><h3>Model</h3><p>Parametric geometry in Rhino and Grasshopper, driven by Python and C#.</p></div>
+          <div class="card"><h3>Assess</h3><p>Life cycle assessment and environmental performance: carbon, daylight, wind comfort, and view to green.</p></div>
+          <div class="card"><h3>Decide</h3><p>Evidence placed early in the design process, where a choice can still move the outcome.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="work" class="section">
+      <div class="panel">
+        <p class="eyebrow">Research</p>
+        <h2>Publications.</h2>
+        <div class="rows">
+          {publications.map((p) => (
+            <div class="row">
+              <span class="yr">{p.year}</span>
+              <div><div class="t">{p.title}</div><div class="v">{p.venue}</div></div>
+              <span class="ty">{p.kind}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="section">
+      <div class="panel">
+        <p class="eyebrow">Background</p>
+        <h2>From construction sites to computational research.</h2>
+        <p class="lede">
+          Civil engineer, environmental engineer, and architect-researcher. Fourteen years in
+          construction, from the technical office to site management and structural design,
+          now inform research on the environmental performance of buildings and cities. Away
+          from the screen, a classical musician.
+        </p>
+      </div>
+    </section>
+
+    <section id="contact" class="section">
+      <div class="panel">
+        <p class="eyebrow">Contact</p>
+        <h2>Collaboration and correspondence.</h2>
+        <div class="links">
+          {links.map((l) => <a href={l.href}>{l.label}</a>)}
+        </div>
+      </div>
+    </section>
+  </div>
 </Base>
 
 <style>
-  header {
+  #scene {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    display: block;
+  }
+
+  .bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 20px 40px;
+    justify-content: space-between;
+    padding: 18px 32px;
   }
 
   .name {
     font-family: var(--font-display);
-    font-size: 19px;
     font-weight: 600;
+    font-size: 19px;
   }
 
-  main {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 18vh 24px 0;
+  .bar-right {
+    display: flex;
+    align-items: center;
+    gap: 26px;
   }
 
-  h1 {
-    font-size: clamp(42px, 7vw, 84px);
-  }
-
-  p {
+  nav {
+    display: flex;
+    gap: 22px;
+    font-size: 13.5px;
     color: var(--muted);
-    max-width: 52ch;
   }
 
-  /* Temporary swatch proving the spectral ramp tokens resolve. */
+  nav a:hover {
+    color: var(--ink);
+  }
+
+  /* Control cluster and legend, bottom-left over the canvas. Mono throughout so
+     it reads as instrumentation rather than prose. */
+  .hero-ui {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    z-index: 10;
+    display: grid;
+    gap: 12px;
+    width: 248px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    font-family: var(--font-mono);
+  }
+
+  .ctl {
+    display: grid;
+    gap: 7px;
+  }
+
+  .ctl-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Metric switcher: a segmented radio group. The active option carries an
+     accent underline as well as color, so the state does not rest on color
+     alone. */
+  .seg {
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+
+  .seg button {
+    flex: 1;
+    padding: 7px 6px 6px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color var(--dur-micro) var(--ease-out), background var(--dur-micro) var(--ease-out);
+  }
+
+  .seg button + button {
+    border-left: 1px solid var(--line);
+  }
+
+  .seg button:hover {
+    color: var(--ink);
+  }
+
+  .seg button[aria-checked='true'] {
+    color: var(--ink);
+    background: var(--panel-soft);
+    border-bottom-color: var(--accent);
+  }
+
   .legend {
-    block-size: 6px;
-    max-width: 280px;
-    border-radius: 3px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .legend-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .legend-title {
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    color: var(--ink);
+  }
+
+  .legend-scale {
+    font-size: 9.5px;
+    color: var(--muted);
+  }
+
+  .legend-bar {
+    height: 9px;
+    border-radius: 4px;
+    /* Set to the active palette gradient at runtime. */
+    background: var(--line);
+  }
+
+  .legend-ticks {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .legend-ticks span {
+    font-size: 9px;
+    line-height: 1;
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .legend-note {
+    margin: 7px 0 0;
+    font-size: 9.5px;
+    line-height: 1.35;
+    color: var(--muted);
+  }
+
+  /* Palette swatches: each shows its own ramp; the active one gets a ring, not
+     just a color change, so the selection is visible without relying on color. */
+  .swatches {
+    display: flex;
+    gap: 8px;
+  }
+
+  .swatches button {
+    flex: 1;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    background-clip: padding-box;
+  }
+
+  .swatches button[aria-checked='true'] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .hero-ui :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .content {
+    position: relative;
+    z-index: 2;
+  }
+
+  .section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+  }
+
+  .panel {
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 40px;
+    border-radius: 20px;
+    background: var(--panel);
+    backdrop-filter: blur(3px);
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+
+  /* The headline is a full nine-word sentence (Payam's wording), so the display
+     size steps down from the old three-word scale and the lines breathe a
+     little more. The cap keeps the longest line inside the panel. */
+  h1 {
+    font-size: clamp(30px, 4.4vw, 52px);
+    line-height: 1.04;
+    margin: 0;
+  }
+
+  .grad {
     background: var(--grad-spectral);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  h2 {
+    font-size: clamp(30px, 4.5vw, 52px);
+    margin: 0 0 18px;
+  }
+
+  .lede {
+    font-size: 19px;
+    line-height: 1.55;
+    max-width: 56ch;
+    color: var(--ink);
+    margin: 20px 0 0;
+  }
+
+  .meta {
+    margin-top: 32px;
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+  }
+
+  .meta div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .meta .k {
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .meta .v {
+    font-size: 14px;
+  }
+
+  .cards {
+    margin-top: 26px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    padding: 20px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+  }
+
+  .card h3 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    margin: 0 0 8px;
+  }
+
+  .card p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .rows {
+    margin-top: 8px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 66px 1fr auto;
+    gap: 20px;
+    align-items: baseline;
+    padding: 18px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .row:first-child {
+    border-top: 0;
+  }
+
+  .row .yr {
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+
+  .row .t {
+    font-size: 17px;
+  }
+
+  .row .v {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .row .ty {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .links {
+    margin-top: 22px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+
+  .links a {
+    color: var(--accent);
+  }
+
+  @media (max-width: 760px) {
+    nav {
+      display: none;
+    }
+
+    /* Keep the cluster clear of the centered content on small screens. */
+    .hero-ui {
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      width: auto;
+    }
+
+    .cards {
+      grid-template-columns: 1fr;
+    }
+
+    .row {
+      grid-template-columns: 48px 1fr;
+    }
+
+    .row .ty {
+      display: none;
+    }
   }
 </style>
+
+<script>
+  import { initHero, type HeroController } from '../scripts/city/hero';
+  import { rampCss, type RampName, type ThemeName } from '../scripts/city/colormaps';
+  import type { MetricKey } from '../scripts/city/metrics';
+
+  const canvas = document.getElementById('scene');
+  const content = document.getElementById('content');
+  if (canvas instanceof HTMLCanvasElement && content instanceof HTMLElement) {
+    initHero(canvas, content).then(buildControls);
+  }
+
+  function currentTheme(): ThemeName {
+    return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  }
+
+  function buildControls(hero: HeroController): void {
+    const ui = document.getElementById('hero-ui');
+    const metricGroup = document.getElementById('metric-group');
+    const paletteGroup = document.getElementById('palette-group');
+    if (!ui || !metricGroup || !paletteGroup) return;
+
+    radioGroup(
+      metricGroup,
+      hero.metricKeys.map((key) => ({ value: key, label: hero.metrics[key].def.short })),
+      hero.activeMetric(),
+      (key) => {
+        hero.setMetric(key as MetricKey);
+        renderLegend();
+      },
+    );
+
+    const palette = radioGroup(
+      paletteGroup,
+      hero.rampNames.map((name) => ({ value: name, label: name, swatch: rampCss(name, currentTheme()) })),
+      hero.activeRamp(),
+      (name) => {
+        hero.setRamp(name as RampName);
+        renderLegend();
+      },
+    );
+
+    renderLegend();
+    ui.hidden = false;
+
+    // A theme change swaps the color window, and can swap the default palette, so
+    // recolor the swatches, re-mark the active one, and redraw the legend.
+    new MutationObserver(() => {
+      palette.restyle((name) => rampCss(name as RampName, currentTheme()));
+      palette.sync(hero.activeRamp());
+      renderLegend();
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    function renderLegend(): void {
+      const info = hero.metrics[hero.activeMetric()];
+      setText('legend-title', info.def.label);
+      setText('legend-scale', 'relative');
+      setText('legend-note', info.def.note);
+
+      const bar = document.getElementById('legend-bar');
+      if (bar) bar.style.background = rampCss(hero.activeRamp(), currentTheme());
+
+      // Color ranks buildings within each view, so the ends read lower and
+      // higher rather than fixed values.
+      const ticks = document.getElementById('legend-ticks');
+      if (!ticks) return;
+      ticks.textContent = '';
+      for (const label of ['lower', 'higher']) {
+        const span = document.createElement('span');
+        span.textContent = label;
+        ticks.appendChild(span);
+      }
+    }
+  }
+
+  interface Option {
+    value: string;
+    label: string;
+    swatch?: string;
+  }
+
+  interface RadioGroup {
+    // Mark a value selected without firing onSelect (used on theme change).
+    sync: (value: string) => void;
+    // Recolor swatch buttons, for when the palette colors depend on the theme.
+    restyle: (swatch: (value: string) => string) => void;
+  }
+
+  // A WAI-ARIA radio group: one tab stop, arrow keys move and select, click
+  // selects. Used for both the metric switcher and the palette swatches.
+  function radioGroup(
+    container: HTMLElement,
+    options: Option[],
+    active: string,
+    onSelect: (value: string) => void,
+  ): RadioGroup {
+    container.textContent = '';
+    const buttons: HTMLButtonElement[] = [];
+
+    const applySelection = (value: string, focus: boolean): void => {
+      buttons.forEach((button) => {
+        const on = button.dataset.value === value;
+        button.setAttribute('aria-checked', String(on));
+        button.tabIndex = on ? 0 : -1;
+        if (on && focus) button.focus();
+      });
+    };
+
+    const select = (value: string, focus: boolean): void => {
+      applySelection(value, focus);
+      onSelect(value);
+    };
+
+    options.forEach((option) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.role = 'radio';
+      button.dataset.value = option.value;
+      const on = option.value === active;
+      button.setAttribute('aria-checked', String(on));
+      button.tabIndex = on ? 0 : -1;
+      if (option.swatch) {
+        button.style.background = option.swatch;
+        button.setAttribute('aria-label', option.label);
+        button.title = option.label;
+      } else {
+        button.textContent = option.label;
+      }
+      button.addEventListener('click', () => select(option.value, false));
+      buttons.push(button);
+      container.appendChild(button);
+    });
+
+    container.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -1
+          : 0;
+      if (!step) return;
+      event.preventDefault();
+      const index = buttons.findIndex((b) => b.getAttribute('aria-checked') === 'true');
+      const next = buttons[(index + step + buttons.length) % buttons.length];
+      select(next.dataset.value as string, true);
+    });
+
+    return {
+      sync: (value) => applySelection(value, false),
+      restyle: (swatch) => {
+        buttons.forEach((button) => {
+          const value = button.dataset.value;
+          if (value) button.style.background = swatch(value);
+        });
+      },
+    };
+  }
+
+  function setText(id: string, text: string): void {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+</script>

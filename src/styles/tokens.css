@@ -33,24 +33,28 @@
 /* Both themes are first class. data-theme is resolved before first paint
    by the boot script in the base layout, then switched by the toggle. */
 
+/* Deep ink-navy rather than near-black, and warm paper rather than cool grey,
+   so both themes read as designed surfaces. The 3D scene mirrors these two
+   background values in hero.ts; change them together. */
+
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #06070c;
-  --ink: #f3f5fa;
-  --muted: #9aa3b2;
-  --panel: rgba(6, 7, 12, 0.72);
-  --panel-soft: rgba(6, 7, 12, 0.28);
+  --bg: #0a0e16;
+  --ink: #eef2f9;
+  --muted: #949db0;
+  --panel: rgba(10, 14, 22, 0.72);
+  --panel-soft: rgba(10, 14, 22, 0.30);
   --accent: #8fd6ff;
-  --line: #232a3a;
+  --line: #263049;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #eef1f6;
-  --ink: #14161d;
-  --muted: #4c5564;
-  --panel: rgba(244, 246, 250, 0.82);
-  --panel-soft: rgba(244, 246, 250, 0.45);
+  --bg: #f2f1ec;
+  --ink: #16181f;
+  --muted: #565f6d;
+  --panel: rgba(246, 245, 240, 0.82);
+  --panel-soft: rgba(246, 245, 240, 0.45);
   --accent: #2b6f8f;
-  --line: #ccd3de;
+  --line: #d8d5cc;
 }

@@ -1,0 +1,748 @@
+---
+// Curriculum vitae page. It opens with the San Francisco blueprint banner as a
+// themed masthead (the dark render on the dark theme, the light render on the
+// light theme), the name and title set over the open sky, and a link to the
+// print PDF. The city is not named here, the same neutral convention the hero
+// uses for its five cities. Below the masthead the page is an ordinary scrolling
+// document on the page background, with no 3D canvas, so the top bar carries a
+// soft panel backing to stay legible over the content rather than the hero's
+// transparent bar.
+//
+// Facts come only from the two CV sources in the project. Two standing rules
+// shape the content: the construction country is never stated, so the industry
+// record shows roles and dates without employer names; and the BSc institution
+// is never published, so the degree appears with its years only. Publication
+// venue cities are omitted, matching the home page. Copy follows
+// academic-writing-style.md.
+import Base from '../layouts/Base.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+
+// Base is '/' today and stays there (see astro.config.mjs); routing everything
+// through BASE_URL keeps the links correct if a subpath base is ever set.
+const base = import.meta.env.BASE_URL;
+const pdfHref = `${base}PayamMadelatCV.pdf`;
+---
+
+<Base
+  title="Payam Madelat, Curriculum Vitae"
+  description="Curriculum vitae of Payam Madelat, Early Stage Researcher at Tallinn University of Technology, working on computational and data-driven methods for the environmental assessment of buildings and cities."
+>
+  <header class="bar">
+    <a class="name" href={base}>Payam Madelat</a>
+    <div class="bar-right">
+      <nav>
+        <a href={`${base}#approach`}>Approach</a>
+        <a href={`${base}#work`}>Work</a>
+        <a href={`${base}#about`}>About</a>
+        <a href={`${base}#contact`}>Contact</a>
+        <a href={`${base}cv`} aria-current="page">CV</a>
+      </nav>
+      <ThemeToggle />
+    </div>
+  </header>
+
+  <section class="masthead">
+    <div class="masthead-inner">
+      <p class="eyebrow">Curriculum Vitae</p>
+      <h1>Payam Madelat</h1>
+      <p class="title">Early Stage Researcher, Tallinn University of Technology</p>
+      <a class="download" href={pdfHref} download="PayamMadelatCV.pdf">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          ></path>
+        </svg>
+        Download CV (PDF)
+      </a>
+    </div>
+  </section>
+
+  <main class="doc">
+    <p class="lede">
+      I am an Early Stage Researcher at Tallinn University of Technology, in the
+      Department of Civil Engineering and Architecture. My research develops
+      parametric and data-driven methods that carry quantified environmental
+      assessment into the earliest stages of building and urban design, where a
+      decision can still change the outcome.
+    </p>
+
+    <ul class="focus">
+      <li>Embodied carbon</li>
+      <li>Parametric LCA</li>
+      <li>Early-stage design</li>
+      <li>Daylight and view to green</li>
+      <li>Pedestrian wind comfort</li>
+      <li>Computational design</li>
+      <li>Building to urban scale</li>
+    </ul>
+
+    <section class="sec">
+      <h2>Education</h2>
+      <div class="entry">
+        <div class="when">In progress</div>
+        <div class="what">
+          <h3>PhD, Civil Engineering and Architecture</h3>
+          <p class="org">Tallinn University of Technology</p>
+          <p class="det">
+            Topic: carbon-neutral urban scenarios, computational design decision
+            support methods for regenerating urban environments. Supervisors:
+            Francesco De Luca and Viktoria Voronova.
+          </p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">2021&ndash;2023</div>
+        <div class="what">
+          <h3>MSc, Environmental Engineering and Management</h3>
+          <p class="org">Tallinn University of Technology, Cum Laude, GPA 5.0/5.0</p>
+          <p class="det">
+            Thesis: a parametric study using a simplified LCA methodology to
+            assess the influence of building parameters on carbon footprint in
+            the early stages of design. Supervisors: Francesco De Luca and
+            Viktoria Voronova.
+          </p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">2004&ndash;2009</div>
+        <div class="what">
+          <h3>BSc, Civil Engineering</h3>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Position</h2>
+      <div class="entry">
+        <div class="when">Feb 2024 &ndash; present</div>
+        <div class="what">
+          <h3>Early Stage Researcher</h3>
+          <p class="org">
+            Tallinn University of Technology, Department of Civil Engineering and
+            Architecture
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Publications</h2>
+      <ol class="pubs">
+        <li>
+          <span class="me">Madelat, P.</span>, De Luca, F., &amp; Voronova, V. (2026).
+          A streamlined method to integrate LCA in early-stages design employing a
+          parametric framework. <span class="venue">Architectural Science Review</span>,
+          1&ndash;29.
+          <a class="doi" href="https://doi.org/10.1080/00038628.2026.2628919">doi.org/10.1080/00038628.2026.2628919</a>
+        </li>
+        <li>
+          De Luca, F., <span class="me">Madelat, P.</span>, Iliste, E., &amp; Pikas, E.
+          (2025). A computational workflow to analyze simplified metrics of
+          environmental building performance in a northern climate.
+          <span class="venue">Journal of Physics: Conference Series</span>, 3140,
+          062020 (CISBAT 2025).
+          <a class="doi" href="https://doi.org/10.1088/1742-6596/3140/6/062020">doi.org/10.1088/1742-6596/3140/6/062020</a>
+        </li>
+        <li>
+          Kazak, J., De Luca, F., &amp; <span class="me">Madelat, P.</span> (2025).
+          Wind analysis methods to improve pedestrian comfort in urban design. A
+          case study in Tallinn, Estonia. <span class="venue">Proceedings of the
+          43rd eCAADe</span>, 395&ndash;402.
+        </li>
+        <li>
+          <span class="me">Madelat, P.</span>, Kazak, J., De Luca, F., &amp; Voronova, V.
+          (2025). Beyond carbon footprint: a parametric tool for early-stage
+          multi-impact life cycle assessment in building design.
+          <span class="venue">Proceedings of the 43rd eCAADe</span>, 673&ndash;682.
+        </li>
+        <li>
+          <span class="me">Madelat, P.</span>, &amp; De Luca, F. (2024). A novel
+          parametric method for assessing view towards green in the early stages
+          of urban design. <span class="venue">Proceedings of the 42nd eCAADe</span>,
+          2, 347&ndash;356.
+          <a class="doi" href="https://doi.org/10.52842/conf.ecaade.2024.2.347">doi.org/10.52842/conf.ecaade.2024.2.347</a>
+        </li>
+        <li>
+          Szentesi-Nejur, S., De Luca, F., Nejur, A., &amp; <span class="me">Madelat, P.</span>
+          (2023). Early design clustering method considering equitable daylight
+          distribution in the adaptive re-use of heritage buildings.
+          <span class="venue">Proceedings of the 41st eCAADe</span>, 2, 105&ndash;114.
+          <a class="doi" href="https://doi.org/10.52842/conf.ecaade.2023.2.105">doi.org/10.52842/conf.ecaade.2023.2.105</a>
+        </li>
+      </ol>
+    </section>
+
+    <section class="sec">
+      <h2>Research projects</h2>
+      <div class="entry">
+        <div class="when">2025&ndash;2028</div>
+        <div class="what">
+          <h3>
+            Driving collaborative innovation towards decarbonization and advanced
+            manufacturing in SMEs across the Baltic Sea Region
+          </h3>
+          <p class="org">Funder: IB.SH Investitionsbank Schleswig-Holstein</p>
+          <p class="det">
+            VIR25013. EUR 418,695. Principal investigator: Viktoria Voronova. In
+            progress.
+          </p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">2023&ndash;2024</div>
+        <div class="what">
+          <h3>
+            IC modules for higher education and vocational schools: a module on
+            knowledge and skills in ICT for construction
+          </h3>
+          <p class="org">Funder: Education and Youth Board</p>
+          <p class="det">
+            TF24022EA. EUR 120,000. Principal investigators: Ergo Pikas and Raido
+            Puust. Completed.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Construction experience</h2>
+      <p class="intro-line">
+        Fourteen years in the construction industry, from the technical office to
+        structural design and site management.
+      </p>
+      <div class="entry">
+        <div class="when">Jan 2015 &ndash; Aug 2021</div>
+        <div class="what">
+          <h3>Civil Engineer</h3>
+          <p class="det">
+            Led the design team on reinforced-concrete residential structures.
+            Supervised surveying, foundation excavation, and construction, and
+            controlled site drawings.
+          </p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Nov 2013 &ndash; Jan 2015</div>
+        <div class="what">
+          <h3>Construction Site Manager</h3>
+          <p class="det">
+            Rebar and in-situ foundation concrete; steel-structure fabrication
+            and erection; subcontractor control; scheduling in MS Project.
+          </p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Mar 2013 &ndash; Nov 2013</div>
+        <div class="what">
+          <h3>Design Engineer</h3>
+          <p class="det">
+            Reinforced-concrete design to six storeys per ACI, using ETABS,
+            SAP2000, SAFE, and AutoCAD, with cost estimation.
+          </p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Nov 2009 &ndash; Mar 2013</div>
+        <div class="what">
+          <h3>Technical Office Engineer</h3>
+          <p class="det">Tender analysis, quantity take-off, and cost estimation.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Aug 2007 &ndash; Nov 2009</div>
+        <div class="what">
+          <h3>Technical Office Engineer</h3>
+          <p class="det">Progress reporting, geometric leveling, and as-built drawings.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Skills and tools</h2>
+
+      <p class="skill-cat">Environmental assessment</p>
+      <ul class="tags">
+        <li>Life cycle assessment</li>
+        <li>Environmental impact assessment</li>
+        <li>Environmental simulations</li>
+        <li>Environmental management systems</li>
+        <li>Building performance</li>
+        <li>Solar design</li>
+      </ul>
+
+      <p class="skill-cat">Computational and parametric design</p>
+      <ul class="tags">
+        <li>Computational design</li>
+        <li>Parametric design</li>
+        <li>Design research</li>
+        <li>Architectural design</li>
+        <li>3D modeling</li>
+        <li>3D visualization</li>
+      </ul>
+
+      <p class="skill-cat">Data science and machine learning</p>
+      <ul class="tags">
+        <li>Python</li>
+        <li>C#</li>
+        <li>Machine learning</li>
+        <li>Artificial intelligence</li>
+        <li>Artificial neural networks</li>
+      </ul>
+
+      <p class="skill-cat">Software and tools</p>
+      <ul class="tags">
+        <li>Rhino 3D</li>
+        <li>Grasshopper</li>
+        <li>Ladybug Tools (Honeybee)</li>
+        <li>ClimateStudio</li>
+        <li>EnergyPlus</li>
+        <li>Building information modeling (BIM)</li>
+        <li>ARCHICAD</li>
+        <li>AutoCAD</li>
+        <li>Microsoft Office</li>
+      </ul>
+
+      <p class="skill-cat">Construction</p>
+      <ul class="tags">
+        <li>Construction management</li>
+        <li>Construction site inspections</li>
+        <li>Steel-structure supervision</li>
+        <li>Cost estimation</li>
+      </ul>
+    </section>
+
+    <section class="sec">
+      <h2>Certifications</h2>
+      <ul class="list">
+        <li>Seismic rehabilitation, and numerical and experimental analysis.</li>
+        <li>Comprehensive project management workshop based on PMBOK.</li>
+      </ul>
+    </section>
+
+    <section class="sec">
+      <h2>Languages</h2>
+      <p class="plain">English (full professional). French (elementary).</p>
+    </section>
+
+    <footer class="contact">
+      <h2>Contact</h2>
+      <div class="links">
+        <a href="mailto:payam.madelat@taltech.ee">Email</a>
+        <a href="https://orcid.org/0009-0007-3109-5988">ORCID</a>
+        <a href="https://scholar.google.com/citations?user=4GzU9WAAAAAJ">Google Scholar</a>
+        <a href="https://github.com/madelat-payam">GitHub</a>
+        <a href="https://www.linkedin.com/in/payam-madelat-32513a144">LinkedIn</a>
+      </div>
+      <p class="updated">Last updated July 2026</p>
+    </footer>
+  </main>
+</Base>
+
+<style>
+  /* The bar stays in flow and sticks, unlike the hero's fixed transparent bar,
+     because this page scrolls real content under it. The panel backing and blur
+     are the same tokens the hero control cluster uses. */
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 19px;
+    text-decoration: none;
+  }
+
+  .bar-right {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+  }
+
+  nav {
+    display: flex;
+    gap: 22px;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+
+  nav a {
+    text-decoration: none;
+  }
+
+  nav a:hover {
+    color: var(--ink);
+  }
+
+  /* Current page marked by color and an accent underline, not color alone. */
+  nav a[aria-current='page'] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-color: var(--accent);
+  }
+
+  /* The banner render is the background; the theme swap is a single custom
+     property so only the active theme's image is ever fetched. Paths are
+     root-absolute because the site base is '/'. The panel gradient is a
+     left-weighted legibility wash so the text reads even where a tower rises
+     into the top-left on a narrow viewport. */
+  .masthead {
+    --banner: url('/banner/blueprint-sf-dark.png');
+    min-height: clamp(340px, 52vh, 560px);
+    display: flex;
+    align-items: flex-start;
+    padding: clamp(40px, 7vh, 84px) 32px clamp(32px, 6vh, 72px);
+    background-image: linear-gradient(100deg, var(--panel), transparent 46%), var(--banner);
+    background-size: cover;
+    background-position: center 30%;
+    background-repeat: no-repeat;
+    border-bottom: 1px solid var(--line);
+  }
+
+  :global(:root[data-theme='light']) .masthead {
+    --banner: url('/banner/blueprint-sf-light.png');
+  }
+
+  .masthead-inner {
+    max-width: 760px;
+    width: 100%;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 16px;
+  }
+
+  .masthead h1 {
+    font-size: clamp(36px, 5.4vw, 62px);
+    line-height: 1.02;
+    margin: 0;
+  }
+
+  .title {
+    margin: 14px 0 0;
+    max-width: 42ch;
+    font-size: clamp(16px, 2.1vw, 20px);
+    color: var(--ink);
+  }
+
+  /* One primary action. Filled with the theme accent; the on-accent ink is set
+     per theme so the label keeps its contrast on both the light cyan and the
+     petrol teal. The focus ring is ink, not accent, so it reads against the
+     accent fill. */
+  .download {
+    --on-accent: #06131c;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 28px;
+    padding: 12px 18px;
+    min-height: 44px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+      transform var(--dur-micro) var(--ease-out),
+      box-shadow var(--dur-micro) var(--ease-out);
+  }
+
+  :global(:root[data-theme='light']) .download {
+    --on-accent: #ffffff;
+  }
+
+  .download:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px -8px var(--accent);
+  }
+
+  .download:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 3px;
+  }
+
+  .download svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .doc {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: clamp(40px, 7vh, 68px) 32px 96px;
+  }
+
+  .lede {
+    margin: 0;
+    max-width: 62ch;
+    font-size: 19px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  .focus {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin: 24px 0 0;
+    padding: 0;
+    font-family: var(--font-mono);
+  }
+
+  .focus li {
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 11px;
+  }
+
+  .sec {
+    margin-top: clamp(38px, 5vh, 54px);
+  }
+
+  .sec h2 {
+    font-size: clamp(22px, 3vw, 28px);
+    margin: 0 0 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* A dated entry: the period in a mono rail on the left, the record on the
+     right. The rail is wide enough to hold a full "Mon YYYY - Mon YYYY" span
+     without wrapping. */
+  .entry {
+    display: grid;
+    grid-template-columns: 154px 1fr;
+    gap: 6px 24px;
+    padding: 16px 0;
+  }
+
+  .entry + .entry {
+    border-top: 1px solid var(--line);
+  }
+
+  .when {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding-top: 3px;
+  }
+
+  .what h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 17px;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .org {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .det {
+    margin: 7px 0 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  .intro-line {
+    margin: 0 0 4px;
+    font-size: 15px;
+    color: var(--ink);
+  }
+
+  /* Numbered citations. The number sits in the gutter so the citation text
+     keeps a clean hanging indent. The name marker is weight, and journal names
+     take italics, both standard for a reference list. */
+  .pubs {
+    counter-reset: pub;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .pubs li {
+    position: relative;
+    padding: 16px 0 16px 34px;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+
+  .pubs li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  .pubs li::before {
+    counter-increment: pub;
+    content: counter(pub);
+    position: absolute;
+    left: 0;
+    top: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .me {
+    font-weight: 600;
+  }
+
+  .venue {
+    font-style: italic;
+  }
+
+  .doi {
+    display: inline-block;
+    margin-top: 3px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    word-break: break-all;
+  }
+
+  .tags {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-mono);
+  }
+
+  .tags li {
+    font-size: 12px;
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 12px;
+  }
+
+  /* Skills are grouped so the fuller list stays scannable rather than a single
+     wall of chips. The category label reads as a quiet mono rule above each
+     group. */
+  .skill-cat {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 18px 0 9px;
+  }
+
+  .skill-cat:first-of-type {
+    margin-top: 6px;
+  }
+
+  .list {
+    margin: 0;
+    padding-left: 1.1em;
+  }
+
+  .list li {
+    margin: 6px 0;
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+
+  .plain {
+    margin: 0;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+
+  .contact {
+    margin-top: clamp(44px, 6vh, 60px);
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+
+  .contact h2 {
+    font-size: clamp(22px, 3vw, 28px);
+    margin: 0 0 16px;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+
+  .links a {
+    color: var(--accent);
+  }
+
+  .updated {
+    margin: 24px 0 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  @media (max-width: 760px) {
+    .bar {
+      padding: 14px 18px;
+    }
+
+    /* The name still links home, so the section jumps can fold away on small
+       screens as they do on the home bar. */
+    nav {
+      display: none;
+    }
+
+    .masthead {
+      padding: 40px 18px 32px;
+      background-position: 32% 28%;
+    }
+
+    .doc {
+      padding: 40px 18px 72px;
+    }
+
+    /* Stack the period above the record; the rail width no longer helps. */
+    .entry {
+      grid-template-columns: 1fr;
+      gap: 2px;
+      padding: 14px 0;
+    }
+
+    .when {
+      padding-top: 0;
+    }
+  }
+</style>
