@@ -64,8 +64,52 @@ const links = [
 >
   <canvas id="scene"></canvas>
 
+  <!-- The intro overlay. Whether it shows is decided by the inline script
+       below before first paint; without JS the attribute is never set and
+       this stays display:none. The name letters are built by the intro
+       module; Arc waits here, parked at zero width, until its cue. -->
+  <div class="intro" id="intro" aria-hidden="true">
+    <div class="intro-veil"></div>
+    <div class="intro-markwrap">
+      <div class="intro-mark"><span class="intro-arc">Arc</span></div>
+    </div>
+    <button class="intro-skip" type="button">Skip intro</button>
+  </div>
+  <script is:inline>
+    // Decide the intro before first paint, the same trick the theme boot
+    // uses: seen it already, or prefers reduced motion, means no overlay and
+    // no flash of it either. The timeout is a watchdog for the one bad state
+    // this overlay could add: if the bundle never arrives, the veil must not
+    // hold the page hostage. Letters present mean the module took over.
+    (function () {
+      // Dev convenience: on a local host the intro replays on every load so it
+      // can be watched while tuning. On the deployed site the localStorage
+      // guard below keeps it once-per-visitor, so there is nothing to switch
+      // back at launch. Delete these two lines to make local loads play once.
+      var DEV_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
+      var replayEveryLoad = DEV_HOSTS.indexOf(location.hostname) !== -1;
+      try {
+        if (!replayEveryLoad && localStorage.getItem('pmarc-intro')) return;
+      } catch (e) {}
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      document.documentElement.dataset.intro = 'pending';
+      setTimeout(function () {
+        var root = document.documentElement;
+        if (root.dataset.intro === 'pending' && !document.querySelector('.intro-letter')) {
+          root.removeAttribute('data-intro');
+          var el = document.getElementById('intro');
+          if (el) el.remove();
+        }
+      }, 10000);
+    })();
+  </script>
+
   <header class="bar">
-    <span class="name">Payam Madelat</span>
+    <span class="name"
+      ><span class="brand" aria-hidden="true"
+        ><span class="brand-pm">PM</span><span class="brand-arc">Arc</span></span
+      ><span class="sr-only">Payam Madelat</span></span
+    >
     <div class="bar-right">
       <nav>
         <a href="#approach">Approach</a>
@@ -203,6 +247,170 @@ const links = [
     font-family: var(--font-display);
     font-weight: 600;
     font-size: 19px;
+  }
+
+  /* The bar wordmark: the person in the display serif, the practice in the
+     technical sans carrying the theme accent. The full name stays in the
+     markup for search engines and screen readers; the wordmark is the visual.
+     While the intro owns the mark, the bar copy waits invisibly (opacity, not
+     display, so the intro can measure its dock target). */
+  .brand {
+    display: inline-flex;
+    align-items: baseline;
+  }
+
+  .brand-pm {
+    font-family: var(--font-display);
+    font-weight: 600;
+  }
+
+  /* The practice half in the script face, overlapping the M a touch, sized and
+     nudged to the locked PMArc lockup. These three values (size, overlap,
+     vertical nudge) are the shared lockup: the intro's Arc uses the same. */
+  .brand-arc {
+    font-family: var(--font-script);
+    /* Pin the true 400: Alex Brush ships a single weight, so the 600 the bar
+       wordmark inherits would render as faux bold and coarsen the script. */
+    font-weight: 400;
+    color: var(--brand-arc);
+    font-size: 1.35em;
+    margin-left: -0.22em;
+    position: relative;
+    top: 0.05em;
+    display: inline-block;
+  }
+
+  :global([data-intro='pending']) .brand {
+    opacity: 0;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Intro overlay. Hidden unless the pre-paint script marks the root; the
+     veil is the page background, so the intro reads as the page itself
+     speaking before it shows anything. Scroll is held until the reveal. */
+  .intro {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+  }
+
+  :global([data-intro='pending']) .intro {
+    display: block;
+  }
+
+  :global(html[data-intro='pending']) {
+    overflow: hidden;
+  }
+
+  .intro-veil {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+  }
+
+  .intro-markwrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .intro-mark {
+    display: inline-flex;
+    align-items: baseline;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(44px, 9vw, 96px);
+    line-height: 1.1;
+    color: var(--ink);
+  }
+
+  .intro-letter {
+    display: inline-block;
+    white-space: pre;
+  }
+
+  /* Arc in the intro shares the bar's lockup (size, overlap, nudge). It grows
+     from zero width as it joins; the vertical padding with matching negative
+     margin gives the script's ascenders and tails room so overflow:hidden
+     clips only the not-yet-revealed right edge, never the glyph tops or tails. */
+  .intro-arc {
+    display: inline-block;
+    white-space: pre;
+    overflow: hidden;
+    width: 0;
+    opacity: 0;
+    font-family: var(--font-script);
+    font-weight: 400;
+    color: var(--brand-arc);
+    font-size: 1.35em;
+    margin-left: -0.22em;
+    position: relative;
+    top: 0.05em;
+    padding: 0.35em 0;
+    margin-top: -0.35em;
+    margin-bottom: -0.35em;
+  }
+
+  /* Typing caret: a thin accent bar that blinks only while .on is set, so GSAP
+     owns its horizontal step without contending for opacity. The intro builds
+     the caret in JS with createElement, so it never carries this component's
+     scoped attribute; the rules are :global so the box and blink still reach
+     it (the letters get their size from text and the flex row, the caret can
+     not, so without this it renders 0x0 and invisible). */
+  :global(.intro-caret) {
+    display: inline-block;
+    width: 0.05em;
+    height: 0.82em;
+    margin-left: 0.05em;
+    position: relative;
+    top: 0.06em;
+    background: var(--brand-arc);
+    opacity: 0;
+  }
+
+  :global(.intro-caret.on) {
+    animation: intro-blink 1.05s steps(1) infinite;
+  }
+
+  @keyframes intro-blink {
+    0%, 49.9% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+
+  .intro-skip {
+    position: absolute;
+    right: 26px;
+    bottom: 22px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    opacity: 0.55;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+
+  .intro-skip:hover,
+  .intro-skip:focus-visible {
+    opacity: 1;
   }
 
   .bar-right {
@@ -557,14 +765,45 @@ const links = [
 </style>
 
 <script>
+  // Runs ahead of the hero bundle in its own module, so the intro is not
+  // waiting on three.js to start writing letters.
+  import { runIntro } from '../scripts/intro/pmarc';
+
+  runIntro();
+</script>
+
+<script>
   import { initHero, type HeroController } from '../scripts/city/hero';
   import { rampCss, type RampName, type ThemeName } from '../scripts/city/colormaps';
   import type { MetricKey } from '../scripts/city/metrics';
 
   const canvas = document.getElementById('scene');
   const content = document.getElementById('content');
-  if (canvas instanceof HTMLCanvasElement && content instanceof HTMLElement) {
-    initHero(canvas, content).then(buildControls);
+
+  function startHero(): void {
+    if (canvas instanceof HTMLCanvasElement && content instanceof HTMLElement) {
+      initHero(canvas, content).then(buildControls);
+    }
+  }
+
+  // Hold the hero until the intro finishes. The hero compiles shaders and runs
+  // a GTAO + shadow render loop heavy enough to starve the intro of paint
+  // frames when both run at once, which reads as the intro jumping between
+  // states instead of animating. The pre-paint script marks data-intro
+  // "pending" while the intro plays and clears it on finish, skip, or the
+  // watchdog; wait for that, or start immediately when no intro is running
+  // (already seen, reduced motion, or no JS gate set).
+  const root = document.documentElement;
+  if (root.dataset.intro === 'pending') {
+    const waitForIntro = new MutationObserver(() => {
+      if (root.dataset.intro !== 'pending') {
+        waitForIntro.disconnect();
+        startHero();
+      }
+    });
+    waitForIntro.observe(root, { attributes: true, attributeFilter: ['data-intro'] });
+  } else {
+    startHero();
   }
 
   function currentTheme(): ThemeName {

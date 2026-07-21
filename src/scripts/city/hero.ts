@@ -1,19 +1,27 @@
 import {
-  AmbientLight,
   BoxGeometry,
   Color,
   DirectionalLight,
   Fog,
   GridHelper,
+  HemisphereLight,
   InstancedMesh,
   LineBasicMaterial,
+  Mesh,
   MeshLambertMaterial,
   Object3D,
+  PCFSoftShadowMap,
   PerspectiveCamera,
+  PlaneGeometry,
   Scene,
+  ShadowMaterial,
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
@@ -37,12 +45,22 @@ const LIGHT = new Color(0xf2f1ec);
 // legible in both. At the old near-black values it vanished on the dark bg.
 const DARK_GRID = new Color(0x2b3550);
 const LIGHT_GRID = new Color(0xcfccc3);
+// Lighting colors per theme, lerped in paintTheme like the background and grid.
+// Sky and ground feed the hemisphere ambient (tops catch the sky, undersides sink
+// toward the ground); the key is the sun. Kept moderate so a lit face still shows
+// its carbon-ramp hue instead of washing out to white.
+const DARK_SKY = new Color(0x9fb4d6);
+const DARK_GROUND = new Color(0x0b0f18);
+const DARK_KEY = new Color(0xffe9cf);
+const LIGHT_SKY = new Color(0xfbf4ea);
+const LIGHT_GROUND = new Color(0xcdc7ba);
+const LIGHT_KEY = new Color(0xfff1d8);
 const GRID_SPAN = WORLD_RADIUS * 2.4;
 
 // One curated shot per city: the framing the camera passes through when that
 // city's box is centered. These are the approved stills from the render rounds.
-// The two tall cities sit low and look up (small height, higher lookY) so
-// their towers loom.
+// The two tall cities sit low and close, so the real-height towers (after the
+// VERTICAL_EXAGGERATION fix) loom instead of reading as low blocks seen from above.
 interface CamKey {
   az: number; // azimuth around the city, radians
   height: number; // camera height in world units
@@ -54,8 +72,8 @@ const CAM_KEYS: CamKey[] = [
   { az: 0.6, height: 24, radius: 42, lookY: 6 }, // c0
   { az: 0.95, height: 26, radius: 41, lookY: 6 }, // c1
   { az: 1.28, height: 27, radius: 40, lookY: 6 }, // c2
-  { az: 1.6, height: 20, radius: 35, lookY: 9 }, // c3, tall: low and looming
-  { az: 2.55, height: 15, radius: 32, lookY: 9 }, // c4, tall: low, island on the diagonal
+  { az: 1.6, height: 11, radius: 27, lookY: 6 }, // c3, tall: dropped low and close so the towers loom
+  { az: 2.55, height: 8, radius: 23, lookY: 5 }, // c4, tall: low and close, island on the diagonal
 ];
 
 // Catmull-Rom through the keys, one field at a time, ends clamped. The path
@@ -126,12 +144,64 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   const mesh = new InstancedMesh(geometry, new MeshLambertMaterial(), count);
   scene.add(mesh);
 
-  // A raking key light plus fill gives each block shaded faces, so buildings
-  // read as separate forms rather than a flat field of one color.
-  const key = new DirectionalLight(0xffffff, 0.7);
-  key.position.set(28, 60, 18);
+  // Lighting. A hemisphere ambient (sky above, ground below) gives every block a
+  // top-to-bottom gradient so forms read without washing the color to white; a
+  // raking key stands in for the sun; a weak counter-fill keeps the shadowed sides
+  // from going dead; a soft shadow grounds the towers on the light theme; and ambient
+  // occlusion darkens where forms meet, which is what carries the depth on the dark
+  // theme, where a cast shadow on the near-black ground cannot. Light colors track
+  // the theme in paintTheme.
+  const hemi = new HemisphereLight(0xffffff, 0xffffff, 0.5);
+  scene.add(hemi);
+
+  const key = new DirectionalLight(0xffffff, 0.6);
+  key.position.set(34, 44, 22);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.bias = -0.0004;
+  const shadowExtent = WORLD_RADIUS * 1.4;
+  Object.assign(key.shadow.camera, { left: -shadowExtent, right: shadowExtent, top: shadowExtent, bottom: -shadowExtent, near: 1, far: 240 });
+  key.shadow.camera.updateProjectionMatrix();
   scene.add(key);
-  scene.add(new AmbientLight(0xffffff, 0.62));
+
+  const fill = new DirectionalLight(0xffffff, 0.15);
+  fill.position.set(-26, 20, -20);
+  scene.add(fill);
+
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  // A near-invisible plane catches the soft shadow so the towers sit on something,
+  // while the scene keeps its floating look wherever no shadow falls.
+  const shadowGround = new Mesh(new PlaneGeometry(GRID_SPAN * 1.6, GRID_SPAN * 1.6), new ShadowMaterial({ opacity: 0.33 }));
+  shadowGround.rotation.x = -Math.PI / 2;
+  shadowGround.receiveShadow = true;
+  scene.add(shadowGround);
+
+  // Ambient occlusion runs as a post pass, so the frame goes through a composer
+  // rather than a direct render (draw, below). GTAO darkens contacts from geometry
+  // alone, so the depth reads on both themes, including where the cast shadow cannot
+  // register on the dark theme's near-black ground.
+  const composer = new EffectComposer(renderer);
+  composer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  composer.setSize(innerWidth, innerHeight);
+  composer.addPass(new RenderPass(scene, camera));
+  const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+  // Radius in world units: the scene spans ~26 and blocks are a few units, so a
+  // radius near 2 catches building-to-building and base contact without graying whole
+  // faces; blendIntensity above 1 keeps the occlusion dark enough to read on dark.
+  gtao.updateGtaoMaterial({
+    radius: 2, distanceExponent: 1, thickness: 1, scale: 1, samples: 16, distanceFallOff: 1, screenSpaceRadius: false,
+  });
+  gtao.blendIntensity = 1.35;
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+
+  function draw(): void {
+    composer.render();
+  }
 
   const grid = new GridHelper(GRID_SPAN, 30);
   grid.position.y = 0.01;
@@ -252,12 +322,17 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     bg.copy(DARK).lerp(LIGHT, mix);
     fog.color.copy(bg);
     gridMaterial.color.copy(DARK_GRID).lerp(LIGHT_GRID, mix);
+    hemi.color.copy(DARK_SKY).lerp(LIGHT_SKY, mix);
+    hemi.groundColor.copy(DARK_GROUND).lerp(LIGHT_GROUND, mix);
+    key.color.copy(DARK_KEY).lerp(LIGHT_KEY, mix);
+    fill.color.copy(DARK_SKY).lerp(LIGHT_SKY, mix);
   }
 
   function resize(): void {
     renderer.setSize(innerWidth, innerHeight);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
+    composer.setSize(innerWidth, innerHeight);
   }
   addEventListener('resize', resize);
   resize();
@@ -352,7 +427,7 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
       paintTheme(readTheme());
       placeCamera(cameraShot(0, 0), 0, 0, true);
       camDirty = false;
-      renderer.render(scene, camera);
+      draw();
     };
     renderStatic();
     addEventListener('resize', renderStatic);
@@ -447,7 +522,7 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     themeMix += (targetTheme - themeMix) * 0.08;
     paintTheme(themeMix);
 
-    renderer.render(scene, camera);
+    draw();
     requestAnimationFrame(frame);
   }
   frame();

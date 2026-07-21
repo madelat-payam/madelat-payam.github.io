@@ -23,20 +23,25 @@ export const GEOM_STRIDE = 6;
 
 // Footprints are scaled so each city's extent fills roughly the same ground
 // radius, which keeps the morph framed. Height shares that SAME metres-to-world
-// scale, so every building keeps its real proportions instead of turning into a
-// needle; a single uniform vertical exaggeration then lifts the whole skyline
-// for legibility, the same trick relief maps use. Footprints get a small gain so
-// blocks read as massing. These shape the drawing only; the metrics use the raw
-// values. Earlier this compressed height by an exponent on its own scale, which
-// looked fine on the small synthetic sample but turned the real, kilometres-wide
-// cities into thin spikes once the footprint scale shrank and the height did not.
+// scale, so proportions stay real rather than turning into needles. Footprints
+// then get a small gain so the blocks touch and read as massing rather than a
+// scatter of dots, and the vertical exaggeration is set to match that gain, so a
+// building's drawn height against its footprint equals its real one. These shape
+// the drawing only; the metrics use the raw values. Earlier this compressed
+// height by an exponent on its own scale, which looked fine on the small
+// synthetic sample but turned the real, kilometres-wide cities into thin spikes
+// once the footprint scale shrank and the height did not.
 export const WORLD_RADIUS = 26;
 // Scale each city so the quantile of its buildings given here fills the frame.
 // Using a core quantile rather than the full 95th-percentile extent zooms into
 // the dense center, so a kilometers-wide real city reads as a full skyline
 // rather than a sparse scatter, with the outskirts falling away into the fog.
 export const CORE_QUANTILE = 0.8;
-export const VERTICAL_EXAGGERATION = 3.0;
+// Matched to FOOTPRINT_GAIN: gaining the footprint and lifting height by the same
+// factor keeps a building's drawn height against its footprint equal to its real
+// one. It was 3.0, which drew the towers as needles; below 1.6 they go squat,
+// because the gained footprints stay wide.
+export const VERTICAL_EXAGGERATION = 1.6;
 export const FOOTPRINT_GAIN = 1.6;
 
 interface CityMeta {

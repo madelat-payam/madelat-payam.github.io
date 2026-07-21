@@ -1,12 +1,16 @@
 ---
-// Curriculum vitae page. It opens with the San Francisco blueprint banner as a
-// themed masthead (the dark render on the dark theme, the light render on the
-// light theme), the name and title set over the open sky, and a link to the
-// print PDF. The city is not named here, the same neutral convention the hero
-// uses for its five cities. Below the masthead the page is an ordinary scrolling
-// document on the page background, with no 3D canvas, so the top bar carries a
-// soft panel backing to stay legible over the content rather than the hero's
-// transparent bar.
+// Curriculum vitae page. It opens with the blueprint banner as a themed
+// masthead (the dark render on the dark theme, the light render on the light
+// theme), the name and title set over the open sky, and a link to the print
+// PDF. The city is not named here, the same neutral convention the hero uses
+// for its five cities. The banner is layered: the PNG paints instantly as the
+// background, and on capable desktops a live WebGL version of the same scene
+// (src/scripts/banner/blueprint.ts, lazy-loaded so the page pays nothing for
+// it up front) fades in over the PNG at the identical camera and drifts
+// slowly. Reduced motion, small screens, no WebGL, and no JS all simply keep
+// the PNG. Below the masthead the page is an ordinary scrolling document on
+// the page background, so the top bar carries a soft panel backing to stay
+// legible over the content rather than the hero's transparent bar.
 //
 // Facts come only from the two CV sources in the project. Two standing rules
 // shape the content: the construction country is never stated, so the industry
@@ -28,7 +32,11 @@ const pdfHref = `${base}PayamMadelatCV.pdf`;
   description="Curriculum vitae of Payam Madelat, Early Stage Researcher at Tallinn University of Technology, working on computational and data-driven methods for the environmental assessment of buildings and cities."
 >
   <header class="bar">
-    <a class="name" href={base}>Payam Madelat</a>
+    <a class="name" href={base}
+      ><span class="brand" aria-hidden="true"
+        ><span class="brand-pm">PM</span><span class="brand-arc">Arc</span></span
+      ><span class="sr-only">Payam Madelat</span></a
+    >
     <div class="bar-right">
       <nav>
         <a href={`${base}#approach`}>Approach</a>
@@ -42,6 +50,7 @@ const pdfHref = `${base}PayamMadelatCV.pdf`;
   </header>
 
   <section class="masthead">
+    <canvas class="masthead-live" aria-hidden="true"></canvas>
     <div class="masthead-inner">
       <p class="eyebrow">Curriculum Vitae</p>
       <h1>Payam Madelat</h1>
@@ -359,6 +368,26 @@ const pdfHref = `${base}PayamMadelatCV.pdf`;
   </main>
 </Base>
 
+<script>
+  // Gate for the live banner. The PNG background is the page; the live scene
+  // is an enhancement that only capable, motion-tolerant desktops pay for.
+  // The WebGL probe runs on a throwaway canvas so a failed context never
+  // taints the one the module will render into. A load or init failure keeps
+  // the PNG and says nothing; the masthead is not the place for error text.
+  const live = document.querySelector<HTMLCanvasElement>('.masthead-live');
+  if (
+    live &&
+    matchMedia('(prefers-reduced-motion: no-preference)').matches &&
+    innerWidth >= 760 &&
+    document.createElement('canvas').getContext('webgl2') !== null
+  ) {
+    import('../scripts/banner/blueprint')
+      .then(({ initBanner }) => initBanner(live))
+      .then(() => live.classList.add('is-live'))
+      .catch(() => {});
+  }
+</script>
+
 <style>
   /* The bar stays in flow and sticks, unlike the hero's fixed transparent bar,
      because this page scrolls real content under it. The panel backing and blur
@@ -381,6 +410,43 @@ const pdfHref = `${base}PayamMadelatCV.pdf`;
     font-weight: 600;
     font-size: 19px;
     text-decoration: none;
+  }
+
+  /* The docked PMArc wordmark, matching the home bar: person in the display
+     serif, practice in the script face carrying the accent. The full name stays
+     in the markup for search engines and screen readers. The CV page has no
+     intro, so the mark simply sits here from first paint. */
+  .brand {
+    display: inline-flex;
+    align-items: baseline;
+  }
+
+  .brand-pm {
+    font-family: var(--font-display);
+    font-weight: 600;
+  }
+
+  .brand-arc {
+    font-family: var(--font-script);
+    font-weight: 400; /* true weight; Alex Brush has no bold to inherit */
+    color: var(--brand-arc);
+    font-size: 1.35em;
+    margin-left: -0.22em;
+    position: relative;
+    top: 0.05em;
+    display: inline-block;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .bar-right {
@@ -416,25 +482,55 @@ const pdfHref = `${base}PayamMadelatCV.pdf`;
      property so only the active theme's image is ever fetched. Paths are
      root-absolute because the site base is '/'. The panel gradient is a
      left-weighted legibility wash so the text reads even where a tower rises
-     into the top-left on a narrow viewport. */
+     into the top-left on a narrow viewport; it lives on ::before rather than
+     in the background stack so it also washes over the live canvas, which
+     slots between the PNG and the text. */
   .masthead {
     --banner: url('/banner/blueprint-sf-dark.png');
+    position: relative;
+    overflow: hidden;
     min-height: clamp(340px, 52vh, 560px);
     display: flex;
     align-items: flex-start;
     padding: clamp(40px, 7vh, 84px) 32px clamp(32px, 6vh, 72px);
-    background-image: linear-gradient(100deg, var(--panel), transparent 46%), var(--banner);
+    background-image: var(--banner);
     background-size: cover;
     background-position: center 30%;
     background-repeat: no-repeat;
     border-bottom: 1px solid var(--line);
   }
 
+  .masthead::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, var(--panel), transparent 46%);
+    z-index: 1;
+    pointer-events: none;
+  }
+
   :global(:root[data-theme='light']) .masthead {
     --banner: url('/banner/blueprint-sf-light.png');
   }
 
+  /* The live scene fades in only after its first frame is rendered at the
+     PNG's own camera, so the swap reads as the drawing waking up, not a load. */
+  .masthead-live {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+  }
+
+  .masthead-live.is-live {
+    opacity: 1;
+  }
+
   .masthead-inner {
+    position: relative;
+    z-index: 2;
     max-width: 760px;
     width: 100%;
   }

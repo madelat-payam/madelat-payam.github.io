@@ -24,6 +24,7 @@
   --font-display: 'Fraunces Variable', Georgia, serif;
   --font-sans: 'Space Grotesk Variable', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-script: 'Alex Brush', 'Segoe Script', cursive;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-micro: 200ms;
@@ -45,6 +46,10 @@
   --panel: rgba(10, 14, 22, 0.72);
   --panel-soft: rgba(10, 14, 22, 0.30);
   --accent: #8fd6ff;
+  /* The script wordmark (Arc) carries its own accent so the dark cursive can
+     warm to amber without moving the site accent the hero, links, and banner
+     share. Light needs no such split, so it just reuses --accent below. */
+  --brand-arc: #e8a95e;
   --line: #263049;
 }
 
@@ -56,5 +61,6 @@
   --panel: rgba(246, 245, 240, 0.82);
   --panel-soft: rgba(246, 245, 240, 0.45);
   --accent: #2b6f8f;
+  --brand-arc: var(--accent);
   --line: #d8d5cc;
 }
