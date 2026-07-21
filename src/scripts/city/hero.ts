@@ -36,6 +36,7 @@ import {
   type ThemeName,
 } from './colormaps';
 import { METRICS, DEFAULT_METRIC, type MetricKey } from './metrics';
+import { buildGroundLayers, GROUND_RENDER_LAYER, type GroundLayers } from './groundLayers';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -56,6 +57,11 @@ const LIGHT_SKY = new Color(0xfbf4ea);
 const LIGHT_GROUND = new Color(0xcdc7ba);
 const LIGHT_KEY = new Color(0xfff1d8);
 const GRID_SPAN = WORLD_RADIUS * 2.4;
+
+// The ground layers (roads, green, water) are extra draw and extra fetch. The mobile
+// pass will turn them off with this one switch: no build, no scene node, no per-frame
+// work. On by default for desktop.
+const SHOW_GROUND_LAYERS = true;
 
 // One curated shot per city: the framing the camera passes through when that
 // city's box is centered. These are the approved stills from the render rounds.
@@ -184,11 +190,19 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   // rather than a direct render (draw, below). GTAO darkens contacts from geometry
   // alone, so the depth reads on both themes, including where the cast shadow cannot
   // register on the dark theme's near-black ground.
+  // GTAO reads the whole scene into a normal/depth buffer to find contacts. The flat
+  // ground layers would poison that: a plane spanning the ground makes a concave water
+  // inlet read as fully occluded and turn black. This clone stays on the default render
+  // layer, so the AO buffer sees the massing alone; the real camera below also draws the
+  // ground layer. syncAoCamera keeps the clone on the real camera every frame.
+  const gtaoCamera = camera.clone();
+  gtaoCamera.layers.set(0);
+
   const composer = new EffectComposer(renderer);
   composer.setPixelRatio(Math.min(devicePixelRatio, 2));
   composer.setSize(innerWidth, innerHeight);
   composer.addPass(new RenderPass(scene, camera));
-  const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+  const gtao = new GTAOPass(scene, gtaoCamera, innerWidth, innerHeight);
   // Radius in world units: the scene spans ~26 and blocks are a few units, so a
   // radius near 2 catches building-to-building and base contact without graying whole
   // faces; blendIntensity above 1 keeps the occlusion dark enough to read on dark.
@@ -212,6 +226,17 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   gridMaterial.transparent = true;
   gridMaterial.opacity = 0.5;
   scene.add(grid);
+
+  // The road/green/water layers for every city, drawn flat under the massing at each
+  // city's own world scale. setMorph cross-fades the resting city's ground with the
+  // morph; paint tracks the theme. The visible camera has to see their render layer;
+  // the AO clone above deliberately does not.
+  let layers: GroundLayers | null = null;
+  if (SHOW_GROUND_LAYERS) {
+    layers = await buildGroundLayers(import.meta.env.BASE_URL, data.scale);
+    scene.add(layers.object);
+    camera.layers.enable(GROUND_RENDER_LAYER);
+  }
 
   let activeMetric: MetricKey = DEFAULT_METRIC;
   // null means follow the theme default; a visitor's pick pins a ramp.
@@ -318,6 +343,15 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     camera.lookAt(camLook);
   }
 
+  // Keep the AO camera clone on the real camera. Same view and projection; only the
+  // render-layer mask differs, so GTAO samples the massing while the beauty pass draws
+  // the ground layers too.
+  function syncAoCamera(): void {
+    gtaoCamera.position.copy(camera.position);
+    gtaoCamera.quaternion.copy(camera.quaternion);
+    gtaoCamera.updateMatrixWorld();
+  }
+
   function paintTheme(mix: number): void {
     bg.copy(DARK).lerp(LIGHT, mix);
     fog.color.copy(bg);
@@ -326,12 +360,15 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     hemi.groundColor.copy(DARK_GROUND).lerp(LIGHT_GROUND, mix);
     key.color.copy(DARK_KEY).lerp(LIGHT_KEY, mix);
     fill.color.copy(DARK_SKY).lerp(LIGHT_SKY, mix);
+    layers?.paint(mix);
   }
 
   function resize(): void {
     renderer.setSize(innerWidth, innerHeight);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
+    gtaoCamera.aspect = camera.aspect;
+    gtaoCamera.updateProjectionMatrix();
     composer.setSize(innerWidth, innerHeight);
   }
   addEventListener('resize', resize);
@@ -424,8 +461,10 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     // visitor's own hand. Metric, palette, and theme changes apply immediately.
     const renderStatic = (): void => {
       if (lastApplied < 0) applyProgress(0);
+      layers?.setMorph(0);
       paintTheme(readTheme());
       placeCamera(cameraShot(0, 0), 0, 0, true);
+      syncAoCamera();
       camDirty = false;
       draw();
     };
@@ -511,13 +550,17 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     // between boxes. current trails the target so scroll jitter never snaps.
     const target = morphFromAnchors(scroll.progress, anchors);
     current += (target - current) * 0.1;
-    if (lastApplied < 0 || Math.abs(current - lastApplied) > 0.002) applyProgress(current);
+    if (lastApplied < 0 || Math.abs(current - lastApplied) > 0.002) {
+      applyProgress(current);
+      layers?.setMorph(current);
+    }
 
     const sec = performance.now() / 1000;
     camU += (camPathFromAnchors(scroll.progress, anchors) - camU) * 0.06;
     mouseS.x += (mouse.x - mouseS.x) * 0.05;
     mouseS.y += (mouse.y - mouseS.y) * 0.05;
     placeCamera(cameraShot(camU, sec), mouseS.x, mouseS.y, false);
+    syncAoCamera();
 
     themeMix += (targetTheme - themeMix) * 0.08;
     paintTheme(themeMix);

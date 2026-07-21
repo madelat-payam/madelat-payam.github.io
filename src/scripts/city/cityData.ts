@@ -68,6 +68,10 @@ export interface MetricInfo {
 export interface CityData {
   // One geometry array per city, already in world units, stride GEOM_STRIDE.
   geom: Float32Array[];
+  // The metres-to-world factor toGeometry applied to each city, in city order.
+  // The ground layers arrive as raw metres in the same frame as the blocks, so
+  // multiplying their vertices by this places them under the right city.
+  scale: number[];
   // Per metric, one array per city of color positions in [0,1], aligned to geom.
   metricT: Record<MetricKey, Float32Array[]>;
   // Per metric, the domain and legend ticks that describe those positions.
@@ -87,13 +91,15 @@ export async function loadCities(base: string): Promise<CityData> {
   );
   const raws = buffers.map((buffer) => new Float32Array(buffer));
 
-  const geom = raws.map((raw) => toGeometry(raw));
+  const built = raws.map((raw) => toGeometry(raw));
+  const geom = built.map((b) => b.geom);
+  const scale = built.map((b) => b.scale);
   const { metricT, metrics } = buildMetrics(raws);
 
-  return { geom, metricT, metrics, count: manifest.n };
+  return { geom, scale, metricT, metrics, count: manifest.n };
 }
 
-function toGeometry(raw: Float32Array): Float32Array {
+function toGeometry(raw: Float32Array): { geom: Float32Array; scale: number } {
   const n = raw.length / RAW_STRIDE;
   const scale = WORLD_RADIUS / coreRadius(raw, n, CORE_QUANTILE);
   const blockScale = scale * FOOTPRINT_GAIN;
@@ -109,7 +115,7 @@ function toGeometry(raw: Float32Array): Float32Array {
     // Same scale as the footprint, times a uniform lift: proportions stay real.
     out[g + 5] = raw[r + R_HEIGHT] * scale * VERTICAL_EXAGGERATION;
   }
-  return out;
+  return { geom: out, scale };
 }
 
 // The distance from the city center below which the given quantile of buildings
