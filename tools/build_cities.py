@@ -48,6 +48,17 @@ Output lands in ../public/data/cities relative to this file. The run reports,
 per city, the real building count, the count used, the extent radius, the
 tallest block, and the class mix; review those, then commit the files.
 
+Real footprints: alongside each boxed c{i}.bin the tool writes c{i}.footprints.bin,
+the outline of every building that clears the same filters, in city-centered
+meters. These are the LoD1 source the hero extrudes to height. Unlike the boxes
+they are not resampled to a shared count, because the rebuilt hero no longer morphs
+one building onto another; it sinks one city into the ground and raises the next.
+The file is a struct of arrays, little-endian like the rest: building count and
+vertex total, then one ring length per building, then all x/z pairs (rings
+concatenated in building order, stored open and counter-clockwise), then height,
+area, floors, and a class byte per building. The manifest gains a "footprints"
+object per city, next to "layers".
+
 Ground layers (roads, green areas, water) are a second mode that leaves the
 building files alone:
 
@@ -81,12 +92,12 @@ water above green, which keeps the picture right at massing abstraction.
 """
 
 import argparse
+import http.client
 import json
 import math
 import os
 import struct
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, namedtuple
@@ -114,6 +125,12 @@ OVERPASS_ENDPOINTS = [
 # code below. The web loader reads exactly this field order.
 Block = namedtuple("Block", "x z w d angle height area floors cls")
 STRIDE = len(Block._fields)
+
+# The real-footprint record for c{i}.footprints.bin: the cleaned outline ring in
+# city-centered meters (open, counter-clockwise) plus the same per-building
+# quantities the box carries. Variable length because of the ring, so the writer
+# packs a struct of arrays rather than a fixed stride (see pack_footprints).
+Footprint = namedtuple("Footprint", "ring height area floors cls")
 
 # Rough level height when a building gives no floor count and no metric height.
 METERS_PER_LEVEL = 3.2
@@ -211,9 +228,11 @@ def fetch_payload(query, what):
                 )
                 with urllib.request.urlopen(request, timeout=300) as response:
                     return json.load(response)
-            except (urllib.error.URLError, TimeoutError) as error:
+            except (OSError, http.client.HTTPException) as error:
                 last_error = error
-                # Overpass throttles under load; back off before retrying.
+                # Overpass throttles under load and sometimes drops the connection
+                # mid-response (RemoteDisconnected); both surface here, not just as a
+                # URLError. Back off before retrying, then fall to the next endpoint.
                 time.sleep(5 * (attempt + 1))
     raise RuntimeError(f"Overpass unreachable for {what}: {last_error}")
 
@@ -409,17 +428,33 @@ def percentile(values, q):
     return ordered[lo] * (hi - k) + ordered[hi] * (k - lo)
 
 
-def fetch_city(city):
-    return extract_blocks(fetch(city["bbox"]), city["bbox"])
+def fetch_city(city, cache_dir, refetch):
+    # Cache the raw building payload the way the layers do, so retuning the export
+    # never pulls the same city from Overpass twice. --refetch forces a fresh pull.
+    path = os.path.join(cache_dir, f"{city['id']}.buildings.json")
+    if not refetch and os.path.exists(path):
+        with open(path) as handle:
+            payload = json.load(handle)
+        cached = True
+    else:
+        payload = fetch(city["bbox"])
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(path, "w") as handle:
+            json.dump(payload, handle)
+        cached = False
+    blocks, footprints = extract_blocks(payload, city["bbox"])
+    return blocks, footprints, cached
 
 
 def extract_blocks(payload, bbox):
-    # Reduce an Overpass payload to Morton-sorted blocks at full resolution. No
-    # resampling happens here, so main() can see every city's real count first
-    # and choose one shared count that never has to duplicate a building.
+    # Reduce an Overpass payload to Morton-sorted blocks, and collect the real
+    # footprint outlines in the same pass. Both keep every building that clears the
+    # filters, so main() sees each city's real count before choosing one shared box
+    # count. The boxes feed the legacy morph file; the rings feed the extruded hero.
     south, west, north, east = bbox
     lat0, lon0 = (south + north) / 2, (west + east) / 2
 
+    boxes = []
     footprints = []
     for coords, tags in parse_buildings(payload):
         projected = [project(lat, lon, lat0, lon0) for lat, lon in coords]
@@ -429,23 +464,26 @@ def extract_blocks(payload, bbox):
         box_x, box_z, width, depth, angle = oriented_box(projected)
         if width < 2.0 or depth < 2.0:
             continue
+        ring = footprint_ring(projected)
+        if ring is None:
+            continue
         height = building_height(tags)
-        footprints.append(
-            (box_x, box_z, width, depth, angle, height, area,
-             building_floors(tags, height), building_class(tags))
-        )
+        floors = building_floors(tags, height)
+        cls = building_class(tags)
+        boxes.append((box_x, box_z, width, depth, angle, height, area, floors, cls))
+        footprints.append(Footprint(ring, height, area, floors, cls))
 
-    if not footprints:
+    if not boxes:
         raise RuntimeError(f"No usable buildings for bbox {bbox}; check the extent")
 
-    xs = [f[0] for f in footprints]
-    zs = [f[1] for f in footprints]
+    xs = [b[0] for b in boxes]
+    zs = [b[1] for b in boxes]
     min_x, max_x = min(xs), max(xs)
     min_z, max_z = min(zs), max(zs)
     span_x = max(max_x - min_x, 1.0)
     span_z = max(max_z - min_z, 1.0)
-    footprints.sort(key=lambda f: morton((f[0] - min_x) / span_x, (f[1] - min_z) / span_z))
-    return [Block(*f) for f in footprints]
+    boxes.sort(key=lambda b: morton((b[0] - min_x) / span_x, (b[1] - min_z) / span_z))
+    return [Block(*b) for b in boxes], footprints
 
 
 def finalize(blocks, n):
@@ -474,6 +512,28 @@ def pack(blocks):
     return bytes(buffer)
 
 
+def pack_footprints(footprints):
+    # Struct of arrays, little-endian: building and vertex counts, then a ring
+    # length per building, then every x/z pair (rings concatenated in building
+    # order), then height, area, floors, and a class byte per building. Nothing is
+    # interleaved, so the web loader slices each array straight out by the counts.
+    building_count = len(footprints)
+    vertex_total = sum(len(f.ring) for f in footprints)
+    out = bytearray()
+    out += struct.pack("<II", building_count, vertex_total)
+    out += struct.pack(f"<{building_count}I", *(len(f.ring) for f in footprints))
+    for f in footprints:
+        flat = []
+        for x, z in f.ring:
+            flat.extend((x, z))
+        out += struct.pack(f"<{len(flat)}f", *flat)
+    out += struct.pack(f"<{building_count}f", *(f.height for f in footprints))
+    out += struct.pack(f"<{building_count}f", *(f.area for f in footprints))
+    out += struct.pack(f"<{building_count}f", *(float(f.floors) for f in footprints))
+    out += struct.pack(f"<{building_count}B", *(f.cls for f in footprints))
+    return bytes(out)
+
+
 # Plane geometry for the ground layers. Everything below works on (x, z)
 # tuples in city-centered meters, the same frame as the building blocks.
 
@@ -494,6 +554,18 @@ def signed_area(ring):
         x1, z1 = ring[(i + 1) % len(ring)]
         a += x0 * z1 - x1 * z0
     return a * 0.5
+
+
+def footprint_ring(points):
+    # Clean a projected outline into the ring the hero extrudes: drop the closing
+    # duplicate and any repeated neighbors, then force counter-clockwise winding so
+    # the extruded walls face outward. None if too little is left to form a face.
+    ring = dedupe(points, closed=True)
+    if len(ring) < 3:
+        return None
+    if signed_area(ring) < 0:
+        ring.reverse()
+    return ring
 
 
 def simplify_polyline(points, tol):
@@ -1230,6 +1302,79 @@ def run_layers(args, cities, out_dir):
         print(f"  debug overlay: {svg_path}")
 
 
+def _read_footprints(data):
+    # Walk c{i}.footprints.bin back into (rings, heights, areas, floors, classes),
+    # the same order the web loader will. Kept here as the reference reader and the
+    # check that the writer consumes exactly the bytes it wrote.
+    off = 0
+    building_count, vertex_total = struct.unpack_from("<II", data, off)
+    off += 8
+    ring_lengths = struct.unpack_from(f"<{building_count}I", data, off)
+    off += 4 * building_count
+    if sum(ring_lengths) != vertex_total:
+        raise ValueError(f"ring lengths sum to {sum(ring_lengths)}, header says {vertex_total}")
+    coords = struct.unpack_from(f"<{2 * vertex_total}f", data, off)
+    off += 8 * vertex_total
+    heights = struct.unpack_from(f"<{building_count}f", data, off)
+    off += 4 * building_count
+    areas = struct.unpack_from(f"<{building_count}f", data, off)
+    off += 4 * building_count
+    floors = struct.unpack_from(f"<{building_count}f", data, off)
+    off += 4 * building_count
+    classes = struct.unpack_from(f"<{building_count}B", data, off)
+    off += building_count
+    if off != len(data):
+        raise ValueError(f"consumed {off} of {len(data)} bytes")
+
+    rings = []
+    at = 0
+    for length in ring_lengths:
+        rings.append([(coords[at + 2 * k], coords[at + 2 * k + 1]) for k in range(length)])
+        at += 2 * length
+    return rings, heights, areas, floors, classes
+
+
+def _self_test():
+    # Pack a hand-built city through the writer and read it back, no network. The
+    # cases exercise the three things that can silently corrupt a ring: a clockwise
+    # winding (must come back counter-clockwise), a doubled vertex (must dedupe),
+    # and a building under the filters (must be dropped).
+    def to_geometry(lat0, lon0, ring_m):
+        # Inverse of project(), so the synthetic meters land back where we put them.
+        cos_lat = math.cos(math.radians(lat0))
+        return [{"lat": lat0 + z / 111132.0, "lon": lon0 + x / (111320.0 * cos_lat)}
+                for x, z in ring_m]
+
+    lat0, lon0 = 59.436, 24.755  # anywhere; the projection cancels out
+    rect = [(-6, -4), (6, -4), (6, 4), (-6, 4), (-6, -4)]           # ccw, 12 x 8 m
+    ell = [(0, 0), (0, 10), (0, 10), (6, 10), (6, 6), (10, 6), (10, 0), (0, 0)]  # cw, doubled point
+    sliver = [(0, 0), (1, 0), (1, 0.2), (0, 0.2), (0, 0)]           # 0.2 m2, dropped
+    payload = {"elements": [
+        {"tags": {"building": "apartments", "building:levels": "5"},
+         "geometry": to_geometry(lat0, lon0, rect)},
+        {"tags": {"building": "office", "height": "24"},
+         "geometry": to_geometry(lat0, lon0, ell)},
+        {"tags": {"building": "yes"},
+         "geometry": to_geometry(lat0, lon0, sliver)},
+    ]}
+    bbox = (lat0 - 0.01, lon0 - 0.01, lat0 + 0.01, lon0 + 0.01)
+
+    blocks, footprints = extract_blocks(payload, bbox)
+    data = pack_footprints(footprints)
+    rings, heights, areas, floors, classes = _read_footprints(data)
+
+    assert len(footprints) == 2, f"expected 2 kept buildings, got {len(footprints)}"
+    assert len(blocks) == len(footprints), "boxes and footprints fell out of lockstep"
+    for src, ring in zip(footprints, rings):
+        assert len(src.ring) == len(ring), "ring length changed across the file"
+        for (sx, sz), (rx, rz) in zip(src.ring, ring):
+            assert abs(sx - rx) < 1e-3 and abs(sz - rz) < 1e-3, "ring coordinates moved"
+        assert signed_area(ring) > 0, "ring came back clockwise"
+    assert sorted(len(r) for r in rings) == [4, 6], "dedupe did not collapse the doubled vertex"
+    print(f"self-test ok: {len(footprints)} buildings, {sum(len(r) for r in rings)} vertices, "
+          f"{len(data)} bytes, every byte consumed, winding and dedupe correct")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build city massing data for the hero.")
     default_out = os.path.join(os.path.dirname(__file__), "..", "public", "data", "cities")
@@ -1256,7 +1401,13 @@ def main():
                         help="directory for raw Overpass responses and debug overlays")
     parser.add_argument("--refetch", action="store_true",
                         help="ignore cached Overpass responses")
+    parser.add_argument("--self-test", action="store_true",
+                        help="pack a synthetic city through the footprint writer, read it back, and exit")
     args = parser.parse_args()
+
+    if args.self_test:
+        _self_test()
+        return
 
     out_dir = os.path.abspath(args.out)
     os.makedirs(out_dir, exist_ok=True)
@@ -1269,51 +1420,99 @@ def main():
         run_layers(args, selected, out_dir)
         return
 
-    # First pass: fetch and reduce every selected city, keeping full resolution.
+    cache_dir = os.path.abspath(args.cache_dir)
+
+    # First pass: fetch (or load from cache) and reduce every selected city,
+    # keeping full resolution for both the boxes and the real footprints.
     prepared = []
     for city in selected:
         print(f"fetching {city['slot']} ({city['id']}) ...")
-        blocks = fetch_city(city)
-        print(f"  {len(blocks)} usable buildings")
-        prepared.append((city, blocks))
+        blocks, footprints, cached = fetch_city(city, cache_dir, args.refetch)
+        if not cached:
+            time.sleep(1.5)  # politeness toward the public Overpass servers
+        print(f"  {len(blocks)} usable buildings ({'cache' if cached else 'overpass'})")
+        prepared.append((city, blocks, footprints))
 
-    # One shared block count. Capping at the smallest city means resampling only
-    # thins and never repeats a building, so nothing stacks into a false overlap.
-    raw_min = min(len(b) for _, b in prepared)
+    # One shared block count for the boxes. Capping at the smallest city means
+    # resampling only thins and never repeats a building, so nothing stacks into a
+    # false overlap. The footprints are never resampled; each city keeps them all.
+    raw_min = min(len(b) for _, b, _ in prepared)
     n = min(args.n, raw_min)
     if n < args.n:
         print(f"note: smallest city has {raw_min} buildings, so n={n} is used for every city to avoid duplicates")
 
-    # Second pass: resample to the shared count, write, and report.
-    manifest_cities = []
-    for city, blocks in prepared:
+    # Second pass: resample the boxes, write both files per city, and report.
+    built = {}
+    for city, blocks, footprints in prepared:
         sampled, stats = finalize(blocks, n)
-        filename = f"{city['slot']}.bin"
-        with open(os.path.join(out_dir, filename), "wb") as handle:
+        box_name = f"{city['slot']}.bin"
+        with open(os.path.join(out_dir, box_name), "wb") as handle:
             handle.write(pack(sampled))
+
+        fp_data = pack_footprints(footprints)
+        fp_name = f"{city['slot']}.footprints.bin"
+        with open(os.path.join(out_dir, fp_name), "wb") as handle:
+            handle.write(fp_data)
+        fp_block = {
+            "file": fp_name,
+            "buildings": len(footprints),
+            "vertices": sum(len(f.ring) for f in footprints),
+            "bytes": len(fp_data),
+        }
+
         mix = ", ".join(f"{label} {count}" for label, count in stats["classes"].items() if count)
         print(
             f"{city['slot']}: {stats['count']} blocks (of {stats['raw_count']} real), "
             f"radius {stats['radius_m']} m, tallest {stats['maxHeight_m']} m"
         )
+        print(f"   footprints: {fp_block['buildings']} buildings, "
+              f"{fp_block['vertices']} vertices, {len(fp_data) / 1024:.0f} KB")
         print(f"   class mix: {mix}")
-        manifest_cities.append({"slot": city["slot"], "file": filename, **stats})
+        built[city["slot"]] = ({"slot": city["slot"], "file": box_name, **stats}, fp_block)
 
-    # Only rewrite the manifest for a full run, so a single --city rebuild does
-    # not drop the other cities from it.
-    if not args.city:
-        manifest = {
-            "n": n,
-            "stride": STRIDE,
-            "fields": list(Block._fields),
-            "classes": CLASS_LABELS,
-            "cities": manifest_cities,
-        }
-        with open(os.path.join(out_dir, "manifest.json"), "w") as handle:
-            json.dump(manifest, handle, indent=2)
-        print(f"wrote manifest with {len(manifest_cities)} cities to {out_dir}")
+    # Merge into the existing manifest rather than authoring it fresh, so a rebuild
+    # keeps each city's ground-layer block (roads, green, water); the buildings pass
+    # never touches those files. A full run rewrites every selected city's entry in
+    # list order; a single --city run updates only that city and leaves the rest,
+    # the same in-place edit the layers build makes.
+    manifest_path = os.path.join(out_dir, "manifest.json")
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as handle:
+            manifest = json.load(handle)
     else:
-        print("single-city run: manifest left unchanged")
+        manifest = {"n": n, "stride": STRIDE, "fields": list(Block._fields),
+                    "classes": CLASS_LABELS, "cities": []}
+
+    manifest["stride"] = STRIDE
+    manifest["fields"] = list(Block._fields)
+    manifest["classes"] = CLASS_LABELS
+    # n scopes the boxes only. A single city cannot know the shared count the other
+    # four were written with, so it leaves the top-level n as it found it.
+    if not args.city:
+        manifest["n"] = n
+
+    entries = {entry["slot"]: entry for entry in manifest["cities"]}
+    for slot, (stats_entry, fp_block) in built.items():
+        entry = dict(entries.get(slot, {}))  # keep an existing layers block if present
+        entry.update(stats_entry)
+        entry["footprints"] = fp_block
+        entries[slot] = entry
+
+    if args.city:
+        order = [entry["slot"] for entry in manifest["cities"]]
+        for slot in built:
+            if slot not in order:
+                order.append(slot)
+    else:
+        order = [city["slot"] for city in selected]
+    manifest["cities"] = [entries[slot] for slot in order]
+
+    with open(manifest_path, "w") as handle:
+        json.dump(manifest, handle, indent=2)
+    if args.city:
+        print(f"updated {args.city} in {manifest_path}")
+    else:
+        print(f"wrote manifest with {len(manifest['cities'])} cities to {out_dir}")
 
 
 if __name__ == "__main__":

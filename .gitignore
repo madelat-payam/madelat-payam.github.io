@@ -3,3 +3,4 @@ dist/
 .astro/
 npm-debug.log*
 .DS_Store
+tools/cache/*.buildings.json

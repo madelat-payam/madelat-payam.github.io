@@ -27,18 +27,18 @@
       "slot": "c0",
       "file": "c0.bin",
       "count": 2400,
-      "raw_count": 7405,
-      "radius_m": 2221.1,
-      "maxHeight_m": 80.0,
+      "raw_count": 7403,
+      "radius_m": 2221.0,
+      "maxHeight_m": 117.0,
       "classes": {
-        "other": 1331,
-        "residential_single": 109,
-        "residential_multi": 737,
-        "office": 38,
-        "commercial": 85,
-        "industrial": 35,
-        "education": 34,
-        "civic": 31
+        "other": 1280,
+        "residential_single": 114,
+        "residential_multi": 789,
+        "office": 42,
+        "commercial": 83,
+        "industrial": 40,
+        "education": 28,
+        "civic": 24
       },
       "layers": {
         "roads": {
@@ -63,23 +63,29 @@
           "orientation": "cw",
           "bytes": 4748
         }
+      },
+      "footprints": {
+        "file": "c0.footprints.bin",
+        "buildings": 7403,
+        "vertices": 58745,
+        "bytes": 595819
       }
     },
     {
       "slot": "c1",
       "file": "c1.bin",
       "count": 2400,
-      "raw_count": 9014,
-      "radius_m": 1928.0,
-      "maxHeight_m": 64.0,
+      "raw_count": 9036,
+      "radius_m": 1921.5,
+      "maxHeight_m": 55.0,
       "classes": {
-        "other": 1025,
-        "residential_single": 79,
-        "residential_multi": 1146,
-        "office": 23,
-        "commercial": 65,
-        "industrial": 18,
-        "education": 28,
+        "other": 1046,
+        "residential_single": 75,
+        "residential_multi": 1130,
+        "office": 18,
+        "commercial": 66,
+        "industrial": 20,
+        "education": 29,
         "civic": 16
       },
       "layers": {
@@ -105,24 +111,30 @@
           "orientation": "none",
           "bytes": 7668
         }
+      },
+      "footprints": {
+        "file": "c1.footprints.bin",
+        "buildings": 9036,
+        "vertices": 69631,
+        "bytes": 710668
       }
     },
     {
       "slot": "c2",
       "file": "c2.bin",
       "count": 2400,
-      "raw_count": 10592,
-      "radius_m": 2507.8,
+      "raw_count": 10593,
+      "radius_m": 2503.0,
       "maxHeight_m": 54.4,
       "classes": {
-        "other": 1279,
-        "residential_single": 124,
-        "residential_multi": 822,
-        "office": 56,
-        "commercial": 28,
-        "industrial": 27,
-        "education": 40,
-        "civic": 24
+        "other": 1290,
+        "residential_single": 120,
+        "residential_multi": 814,
+        "office": 50,
+        "commercial": 34,
+        "industrial": 24,
+        "education": 42,
+        "civic": 26
       },
       "layers": {
         "roads": {
@@ -147,6 +159,12 @@
           "orientation": "none",
           "bytes": 2088
         }
+      },
+      "footprints": {
+        "file": "c2.footprints.bin",
+        "buildings": 10593,
+        "vertices": 70592,
+        "bytes": 744825
       }
     },
     {
@@ -189,24 +207,30 @@
           "orientation": "none",
           "bytes": 2596
         }
+      },
+      "footprints": {
+        "file": "c3.footprints.bin",
+        "buildings": 9225,
+        "vertices": 90031,
+        "bytes": 877081
       }
     },
     {
       "slot": "c4",
       "file": "c4.bin",
       "count": 2400,
-      "raw_count": 32695,
-      "radius_m": 5051.2,
-      "maxHeight_m": 236.2,
+      "raw_count": 32772,
+      "radius_m": 5058.2,
+      "maxHeight_m": 285.0,
       "classes": {
-        "other": 1891,
-        "residential_single": 7,
-        "residential_multi": 395,
-        "office": 19,
-        "commercial": 46,
-        "industrial": 2,
+        "other": 1907,
+        "residential_single": 9,
+        "residential_multi": 384,
+        "office": 23,
+        "commercial": 39,
+        "industrial": 5,
         "education": 19,
-        "civic": 21
+        "civic": 14
       },
       "layers": {
         "roads": {
@@ -231,6 +255,12 @@
           "orientation": "cw",
           "bytes": 40856
         }
+      },
+      "footprints": {
+        "file": "c4.footprints.bin",
+        "buildings": 32772,
+        "vertices": 295990,
+        "bytes": 2925052
       }
     }
   ]
