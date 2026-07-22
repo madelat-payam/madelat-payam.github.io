@@ -69,6 +69,15 @@
         "buildings": 7403,
         "vertices": 58745,
         "bytes": 595819
+      },
+      "trees": {
+        "file": "c0.trees.bin",
+        "count": 9583,
+        "points": 6765,
+        "rows": 1629,
+        "forest": 784,
+        "shrub": 405,
+        "bytes": 162915
       }
     },
     {
@@ -117,6 +126,15 @@
         "buildings": 9036,
         "vertices": 69631,
         "bytes": 710668
+      },
+      "trees": {
+        "file": "c1.trees.bin",
+        "count": 8318,
+        "points": 6976,
+        "rows": 168,
+        "forest": 1099,
+        "shrub": 75,
+        "bytes": 141410
       }
     },
     {
@@ -165,6 +183,15 @@
         "buildings": 10593,
         "vertices": 70592,
         "bytes": 744825
+      },
+      "trees": {
+        "file": "c2.trees.bin",
+        "count": 16631,
+        "points": 9811,
+        "rows": 126,
+        "forest": 6644,
+        "shrub": 50,
+        "bytes": 282731
       }
     },
     {
@@ -213,6 +240,15 @@
         "buildings": 9225,
         "vertices": 90031,
         "bytes": 877081
+      },
+      "trees": {
+        "file": "c3.trees.bin",
+        "count": 4243,
+        "points": 2612,
+        "rows": 1383,
+        "forest": 169,
+        "shrub": 79,
+        "bytes": 72135
       }
     },
     {
@@ -261,6 +297,15 @@
         "buildings": 32772,
         "vertices": 295990,
         "bytes": 2925052
+      },
+      "trees": {
+        "file": "c4.trees.bin",
+        "count": 20375,
+        "points": 17878,
+        "rows": 793,
+        "forest": 1350,
+        "shrub": 354,
+        "bytes": 346379
       }
     }
   ]

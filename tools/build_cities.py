@@ -64,6 +64,7 @@ building files alone:
 
     python build_cities.py --layers roads,green,water
     python build_cities.py --layers water --city newyork  # one layer, one city
+    python build_cities.py --layers trees               # add the vegetation pass
 
 Layer runs need the building files and manifest to exist first: each city's
 clip window derives from its built massing, by the same core-radius rule the
@@ -89,6 +90,23 @@ both closures are tested against the city's own buildings (buildings stand on
 land) and the orientation that agrees is kept. Multipolygon inner rings, the
 ponds in parks and islands in lakes, are skipped on purpose; the hero draws
 water above green, which keeps the picture right at massing abstraction.
+
+Trees are a fourth pass in the same --layers machinery, but they land in their
+own manifest block rather than under "layers", because the web draws them as
+extruded canopies, not as a flat fill. Three OSM sources feed one file:
+natural=tree nodes taken as mapped, natural=tree_row ways sampled every few
+meters along their length, and natural=wood, landuse=forest, and (unless
+--no-shrubs) natural=scrub areas filled with a light, deterministic scatter. The
+scatter is a dial, not a census: a realistic stand would clutter the massing and
+balloon the file, so the default lays down roughly one plant per hundred-odd
+square meters. c0.trees.bin is a struct of arrays, little-endian like the rest:
+the tree count, then x, z, height, and crown radius as float32 arrays, then one
+class byte per tree (0 mapped point, 1 row, 2 forest, 3 shrub). Height and crown
+come from OSM height and diameter_crown where a mapper gave them, else a
+per-class default carrying a small deterministic jitter, so a stand varies
+instead of cloning one silhouette. Coverage is honest about OSM: street trees
+appear only where they are mapped, which is uneven across the five extents, while
+wood and forest areas always fill.
 """
 
 import argparse
@@ -171,7 +189,9 @@ BUILDING_CLASS = {
 # cycleways stay out because at 480 blocks per scene they read as noise, not
 # streets. The tier survives into the file so the hero can draw arteries and
 # local streets differently without a refetch.
-LAYER_NAMES = ("roads", "green", "water")
+# "trees" rides the same fetch and clip machinery as the flat layers but writes
+# its own manifest block, next to "layers"; see build_trees and run_layers.
+LAYER_NAMES = ("roads", "green", "water", "trees")
 ROAD_TIER = {
     "motorway": 0, "motorway_link": 0, "trunk": 0, "trunk_link": 0,
     "primary": 0, "primary_link": 0,
@@ -188,6 +208,34 @@ GREEN_NATURAL = {"grassland": 0, "wood": 1, "scrub": 1}
 # Water kinds: 0 inland polygons (rivers, lakes, docks), 1 sea assembled from
 # the coastline.
 WATER_INLAND, WATER_SEA = 0, 1
+
+# Vegetation classes for c{i}.trees.bin: mapped point, sampled row, forest
+# scatter, shrub scatter. Kept coarse on purpose; the renderer only needs to tell
+# a street tree from a low shrub, and the mobile gate can drop the forest scatter
+# first. This enumeration is a shared contract with trees.ts; keep the codes stable.
+TREE_POINT, TREE_ROW, TREE_FOREST, TREE_SHRUB = 0, 1, 2, 3
+TREE_LABELS = {0: "point", 1: "row", 2: "forest", 3: "shrub"}
+
+# Fallback (height_m, crown_radius_m) for a plant OSM does not measure, which is
+# the common case. Sized for an abstract massing: enough spread to read a shrub
+# from a street tree, not so much that any one canopy looks like modeled detail.
+TREE_DEFAULT_SIZE = {
+    TREE_POINT: (8.0, 3.2),
+    TREE_ROW: (7.5, 3.0),
+    TREE_FOREST: (11.0, 3.6),
+    TREE_SHRUB: (2.2, 1.3),
+}
+TREE_SIZE_JITTER = 0.18
+TREE_MIN_H, TREE_MAX_H = 1.5, 45.0
+TREE_MIN_CROWN, TREE_MAX_CROWN = 0.4, 10.0
+
+# Sampling dials, all overridable on the command line. Spacing, not a census: the
+# scatter lays down about one plant per hundred-odd square meters so a wood reads
+# as wooded without turning into a polygon soup.
+TREE_ROW_SPACING_M = 10.0
+FOREST_SPACING_M = 11.0
+SHRUB_SPACING_M = 9.0
+MAX_TREES = 60000
 
 # The clip window is a square of CLIP_MULT core radii, intersected with the
 # fetch bbox. Past about 2.2 core radii everything sits beyond the fog's far
@@ -257,6 +305,20 @@ def layer_query(layer, bbox):
             f'relation["landuse"~"^(grass|forest|meadow|recreation_ground)$"]{b};'
             f'way["natural"~"^(wood|scrub|grassland)$"]{b};'
             f'relation["natural"~"^(wood|scrub|grassland)$"]{b};'
+            f");out geom;"
+        )
+    if layer == "trees":
+        # natural=tree nodes, tree_row ways, and wood/forest/scrub areas in one
+        # pull; build_trees splits them apart. Scrub is fetched even under
+        # --no-shrubs, which only gates whether its points are emitted, so the
+        # cached response stays valid if that switch flips between runs.
+        return (
+            f"[out:json][timeout:300];("
+            f'node["natural"="tree"]{b};'
+            f'way["natural"="tree_row"]{b};'
+            f'way["natural"="wood"]{b};relation["natural"="wood"]{b};'
+            f'way["landuse"="forest"]{b};relation["landuse"="forest"]{b};'
+            f'way["natural"="scrub"]{b};relation["natural"="scrub"]{b};'
             f");out geom;"
         )
     # Water polygons plus the raw coastline; the sea is assembled from the
@@ -1189,6 +1251,11 @@ def write_debug_svg(path, rect, drawn, centroids):
     for x, z in centroids:
         parts.append(f'<circle cx="{x - xmin:.1f}" cy="{zmax - z:.1f}" r="{dot:.1f}" '
                      f'fill="#2b2b2b" fill-opacity="0.45"/>')
+    tree_fill = {TREE_POINT: "#4f7a45", TREE_ROW: "#4f7a45",
+                 TREE_FOREST: "#37652f", TREE_SHRUB: "#8a9a55"}
+    for x, z, _h, cr, cls in drawn.get("trees", ()):
+        parts.append(f'<circle cx="{x - xmin:.1f}" cy="{zmax - z:.1f}" r="{max(1.5, cr):.1f}" '
+                     f'fill="{tree_fill.get(cls, "#4f7a45")}" fill-opacity="0.7"/>')
     parts.append("</svg>")
     with open(path, "w") as handle:
         handle.write("\n".join(parts))
@@ -1196,6 +1263,279 @@ def write_debug_svg(path, rect, drawn, centroids):
 
 def _report_str(report):
     return ", ".join(f"{count} {label}" for label, count in sorted(report.items()) if count)
+
+
+# Vegetation. A fourth --layers pass that reads three OSM sources into one point
+# set per city: mapped trees, sampled tree rows, and a light scatter inside wood,
+# forest, and scrub. It shares the layer fetch, cache, and clip window, but its
+# output is a sibling of "layers" in the manifest, because the web extrudes these
+# into canopies rather than drawing them flat.
+
+def _in_rect(p, rect):
+    return rect[0] <= p[0] <= rect[2] and rect[1] <= p[1] <= rect[3]
+
+
+def _hash01(*ints):
+    # Deterministic pseudo-random in [0, 1) from integer inputs (FNV-1a). Tree
+    # jitter uses this instead of seeding a global RNG, so a rebuild reproduces
+    # the same stand and the scatter never depends on element iteration order.
+    h = 2166136261
+    for value in ints:
+        h ^= int(value) & 0xFFFFFFFF
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h / 4294967296.0
+
+
+def _parse_metres(raw):
+    # Meters from an OSM tag like "12", "12 m", or "12,5"; None when the tag is
+    # absent or not a plain measurement, so the caller falls back to a default.
+    if not raw:
+        return None
+    try:
+        return float(str(raw).split()[0].replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _tree_size(tags, cls, x, z):
+    # Height and crown radius for one plant. An OSM measurement wins where a
+    # mapper gave one; otherwise the class default carries a small deterministic
+    # jitter, keyed to position, so a stand varies rather than cloning a shape.
+    height_default, crown_default = TREE_DEFAULT_SIZE[cls]
+    qx, qz = round(x * 8), round(z * 8)
+
+    height = _parse_metres(tags.get("height"))
+    if height is None:
+        height = height_default * (1.0 + TREE_SIZE_JITTER * (_hash01(qx, qz, 3) - 0.5) * 2.0)
+
+    crown = _parse_metres(tags.get("diameter_crown"))
+    if crown is not None:
+        crown *= 0.5
+    else:
+        crown = crown_default * (1.0 + TREE_SIZE_JITTER * (_hash01(qx, qz, 4) - 0.5) * 2.0)
+
+    return _clamp(height, TREE_MIN_H, TREE_MAX_H), _clamp(crown, TREE_MIN_CROWN, TREE_MAX_CROWN)
+
+
+def _sample_polyline(points, spacing):
+    # Points every `spacing` meters along a polyline, first vertex included. A row
+    # shorter than one spacing still yields its start, so a lone short tree_row is
+    # not lost. Arc-length walk with a carry across segment joins.
+    pts = dedupe(points)
+    if not pts:
+        return []
+    out = [pts[0]]
+    if len(pts) < 2 or spacing <= 0:
+        return out
+    carry = 0.0
+    for i in range(1, len(pts)):
+        x0, z0 = pts[i - 1]
+        x1, z1 = pts[i]
+        seg = math.hypot(x1 - x0, z1 - z0)
+        if seg == 0.0:
+            continue
+        d = spacing - carry
+        while d <= seg:
+            t = d / seg
+            out.append((x0 + t * (x1 - x0), z0 + t * (z1 - z0)))
+            d += spacing
+        carry = seg - (d - spacing)
+    return out
+
+
+def _point_in_ring(x, z, ring):
+    # Even-odd ray cast, the same test build_water uses to settle sea orientation.
+    inside = False
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        xi, zi = ring[i]
+        xj, zj = ring[j]
+        if (zi > z) != (zj > z) and x < (xj - xi) * (z - zi) / (zj - zi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _scatter_in_ring(ring, spacing, cls):
+    # A jittered grid over the ring's bounding box, kept where it lands inside.
+    # The jitter is a hash of the cell, not random noise: reproducible, and enough
+    # to break the rows a bare grid would read as an orchard. cls seeds the hash
+    # so an overlapping wood and scrub do not scatter onto the same points.
+    xs = [p[0] for p in ring]
+    zs = [p[1] for p in ring]
+    min_x, max_x = min(xs), max(xs)
+    min_z, max_z = min(zs), max(zs)
+    out = []
+    col = 0
+    x = min_x
+    while x <= max_x:
+        row = 0
+        z = min_z
+        while z <= max_z:
+            jx = (_hash01(cls, col, row, 1) - 0.5) * spacing * 0.7
+            jz = (_hash01(cls, col, row, 2) - 0.5) * spacing * 0.7
+            if _point_in_ring(x + jx, z + jz, ring):
+                out.append((x + jx, z + jz))
+            z += spacing
+            row += 1
+        x += spacing
+        col += 1
+    return out
+
+
+def _tree_area_kind(tags):
+    # Which scatter an area feeds: wood and forest read as tree canopy, scrub as
+    # low shrubs. Parks, grass, and meadow are left open on purpose; scattering
+    # trees across an open lawn would misread the ground.
+    if tags.get("natural") == "wood" or tags.get("landuse") == "forest":
+        return "forest"
+    if tags.get("natural") == "scrub":
+        return "shrub"
+    return None
+
+
+def build_trees(payload, lat0, lon0, rect, row_spacing, forest_spacing,
+                shrub_spacing, include_shrubs, tol, max_trees):
+    # Reduce one Overpass payload to the vegetation points for a city window, in
+    # the same city-centered meters as the buildings and layers. Three sources:
+    # tree nodes as mapped, tree rows sampled along their length, and
+    # wood/forest/scrub areas filled with a light deterministic scatter. Returns
+    # (trees, report), trees a list of (x, z, height, crown, cls).
+    report = Counter()
+    trees = []
+
+    for element in payload.get("elements", []):
+        tags = element.get("tags", {})
+        if element.get("type") == "node" and tags.get("natural") == "tree":
+            x, z = project(element["lat"], element["lon"], lat0, lon0)
+            if _in_rect((x, z), rect):
+                height, crown = _tree_size(tags, TREE_POINT, x, z)
+                trees.append((x, z, height, crown, TREE_POINT))
+            else:
+                report["trees outside window"] += 1
+        elif (element.get("type") == "way" and tags.get("natural") == "tree_row"
+              and element.get("geometry")):
+            pts = [project(g["lat"], g["lon"], lat0, lon0) for g in element["geometry"]]
+            for x, z in _sample_polyline(pts, row_spacing):
+                if _in_rect((x, z), rect):
+                    height, crown = _tree_size(tags, TREE_ROW, x, z)
+                    trees.append((x, z, height, crown, TREE_ROW))
+
+    # Areas come through _area_rings, which already joins relation members and
+    # skips inner rings; a clearing inside a wood is not carved out, which is fine
+    # at this abstraction. Scattered plants take the class default size (with the
+    # usual jitter): a wood's single height tag stamped on every tree would read
+    # as a flat slab, the opposite of what the scatter is for.
+    for ring, kind in _area_rings(payload, lat0, lon0, _tree_area_kind, report):
+        if kind == "shrub" and not include_shrubs:
+            continue
+        ring = clip_ring(ring, rect)
+        if len(ring) < 3:
+            continue
+        ring = dedupe(simplify_ring(ring, tol), closed=True)
+        if len(ring) < 3:
+            continue
+        cls = TREE_FOREST if kind == "forest" else TREE_SHRUB
+        spacing = forest_spacing if kind == "forest" else shrub_spacing
+        for x, z in _scatter_in_ring(ring, spacing, cls):
+            height, crown = _tree_size({}, cls, x, z)
+            trees.append((x, z, height, crown, cls))
+
+    # A per-city safety net. The scatter density already bounds the count, but an
+    # unusually large mapped wood could still overrun the file budget; thin
+    # uniformly and say so rather than ship a surprise.
+    if max_trees and len(trees) > max_trees:
+        step = len(trees) / max_trees
+        trees = [trees[int(i * step)] for i in range(max_trees)]
+        report["thinned to cap"] += 1
+
+    return trees, report
+
+
+def pack_trees(trees):
+    # Struct of arrays, little-endian like the rest: the tree count, then x, z,
+    # height, and crown radius as float32 arrays, then one class byte per tree.
+    # The same slice-by-count shape the footprint loader already uses.
+    count = len(trees)
+    out = bytearray(struct.pack("<I", count))
+    if count:
+        out += struct.pack(f"<{count}f", *(t[0] for t in trees))
+        out += struct.pack(f"<{count}f", *(t[1] for t in trees))
+        out += struct.pack(f"<{count}f", *(t[2] for t in trees))
+        out += struct.pack(f"<{count}f", *(t[3] for t in trees))
+        out += struct.pack(f"<{count}B", *(t[4] for t in trees))
+    return bytes(out)
+
+
+def _read_trees(data):
+    # Reference reader and the writer's byte-for-byte check, the way
+    # _read_footprints guards the footprint file. Returns the list of tuples.
+    off = 0
+    (count,) = struct.unpack_from("<I", data, off)
+    off += 4
+    if count:
+        xs = struct.unpack_from(f"<{count}f", data, off)
+        off += 4 * count
+        zs = struct.unpack_from(f"<{count}f", data, off)
+        off += 4 * count
+        heights = struct.unpack_from(f"<{count}f", data, off)
+        off += 4 * count
+        crowns = struct.unpack_from(f"<{count}f", data, off)
+        off += 4 * count
+        classes = struct.unpack_from(f"<{count}B", data, off)
+        off += count
+    else:
+        xs = zs = heights = crowns = classes = ()
+    if off != len(data):
+        raise ValueError(f"consumed {off} of {len(data)} bytes")
+    return [(xs[i], zs[i], heights[i], crowns[i], classes[i]) for i in range(count)]
+
+
+def _trees_self_test():
+    # Pack a synthetic city's vegetation through the writer and read it back, no
+    # network. Covers the three sources: one mapped tree carrying its own size, a
+    # 100 m tree_row sampled every 10 m (so 11 points), and a 60 m wood square (so
+    # every scattered point must land inside it). Also checks every byte is
+    # consumed, the way the footprint self-test does.
+    lat0, lon0 = 59.436, 24.755
+    cos_lat = math.cos(math.radians(lat0))
+
+    def to_lonlat(x, z):
+        return {"lat": lat0 + z / 111132.0, "lon": lon0 + x / (111320.0 * cos_lat)}
+
+    def way(tags, ring_m):
+        return {"type": "way", "tags": tags, "geometry": [to_lonlat(x, z) for x, z in ring_m]}
+
+    tree_node = dict(type="node", tags={"natural": "tree", "height": "9", "diameter_crown": "6"},
+                     **to_lonlat(-50.0, -50.0))
+    tree_row = way({"natural": "tree_row"}, [(0.0, 0.0), (0.0, 100.0)])
+    wood_ring = [(170.0, 170.0), (230.0, 170.0), (230.0, 230.0), (170.0, 230.0)]
+    wood = way({"natural": "wood"}, wood_ring + [wood_ring[0]])
+    payload = {"elements": [tree_node, tree_row, wood]}
+
+    rect = (-500.0, -500.0, 500.0, 500.0)
+    trees, _ = build_trees(payload, lat0, lon0, rect, 10.0, 12.0, 10.0, True, SIMPLIFY_AREAS_M, MAX_TREES)
+    data = pack_trees(trees)
+    back = _read_trees(data)
+
+    assert len(back) == len(trees), "tree count changed across the file"
+    for src, got in zip(trees, back):
+        for a, b in zip(src[:4], got[:4]):
+            assert abs(a - b) < 1e-3, "a tree coordinate or size moved"
+        assert src[4] == got[4], "a tree class changed"
+
+    points = [t for t in trees if t[4] == TREE_POINT]
+    rows = [t for t in trees if t[4] == TREE_ROW]
+    forest = [t for t in trees if t[4] == TREE_FOREST]
+    assert len(points) == 1, f"expected 1 mapped tree, got {len(points)}"
+    assert len(rows) == 11, f"expected 11 row samples, got {len(rows)}"
+    assert forest, "the wood square scattered no trees"
+    assert abs(points[0][2] - 9.0) < 1e-3 and abs(points[0][3] - 3.0) < 1e-3, "OSM tree size lost"
+    for x, z, _h, _cr, _cls in forest:
+        assert 170.0 <= x <= 230.0 and 170.0 <= z <= 230.0, "a scattered tree left the wood"
+    print(f"trees self-test ok: {len(trees)} trees "
+          f"({len(points)} point, {len(rows)} row, {len(forest)} forest), "
+          f"{len(data)} bytes, every byte consumed, sizes preserved")
 
 
 def run_layers(args, cities, out_dir):
@@ -1263,6 +1603,25 @@ def run_layers(args, cities, out_dir):
                       + (f" ({note})" if note else ""))
                 if ra > 0 and abs(ta / ra - 1) > 0.01:
                     print(f"  green WARNING: triangulated area is {ta / ra:.3f} of ring area")
+            elif layer == "trees":
+                trees, report = build_trees(
+                    payload, lat0, lon0, rect,
+                    args.tree_row_spacing, args.forest_spacing, args.shrub_spacing,
+                    not args.no_shrubs, args.simplify_areas, args.max_trees)
+                data = pack_trees(trees)
+                drawn["trees"] = trees
+                mix = Counter(t[4] for t in trees)
+                entries["trees"] = {
+                    "file": f"{slot}.trees.bin", "count": len(trees),
+                    "points": mix.get(TREE_POINT, 0), "rows": mix.get(TREE_ROW, 0),
+                    "forest": mix.get(TREE_FOREST, 0), "shrub": mix.get(TREE_SHRUB, 0),
+                    "bytes": len(data),
+                }
+                note = _report_str(report)
+                print(f"  trees ({src}): {len(trees)} trees "
+                      f"({entries['trees']['points']} pt, {entries['trees']['rows']} row, "
+                      f"{entries['trees']['forest']} forest, {entries['trees']['shrub']} shrub), "
+                      f"{len(data) / 1024:.0f} KB" + (f" ({note})" if note else ""))
             else:
                 groups, orientation, drowned, report = build_water(
                     payload, lat0, lon0, rect, args.simplify_areas, args.min_area, centroids)
@@ -1293,7 +1652,10 @@ def run_layers(args, cities, out_dir):
 
         # Manifest and overlay written per city, so an interrupted run leaves
         # every finished city complete.
+        tree_entry = entries.pop("trees", None)
         by_slot[slot].setdefault("layers", {}).update(entries)
+        if tree_entry is not None:
+            by_slot[slot]["trees"] = tree_entry
         with open(manifest_path, "w") as handle:
             json.dump(manifest, handle, indent=2)
         svg_path = os.path.join(cache_dir, f"{city['id']}.layers.svg")
@@ -1396,6 +1758,16 @@ def main():
                         help="area simplification tolerance in meters")
     parser.add_argument("--min-area", type=float, default=MIN_AREA_M2,
                         help="smallest kept green or water area in square meters")
+    parser.add_argument("--tree-row-spacing", type=float, default=TREE_ROW_SPACING_M,
+                        help="meters between trees sampled along a natural=tree_row")
+    parser.add_argument("--forest-spacing", type=float, default=FOREST_SPACING_M,
+                        help="scatter spacing in meters inside wood and forest areas")
+    parser.add_argument("--shrub-spacing", type=float, default=SHRUB_SPACING_M,
+                        help="scatter spacing in meters inside scrub areas")
+    parser.add_argument("--no-shrubs", action="store_true",
+                        help="skip natural=scrub and emit trees only")
+    parser.add_argument("--max-trees", type=int, default=MAX_TREES,
+                        help="per-city cap; the scatter is thinned uniformly above it")
     parser.add_argument("--cache-dir",
                         default=os.path.join(os.path.dirname(__file__), "cache"),
                         help="directory for raw Overpass responses and debug overlays")
@@ -1407,6 +1779,7 @@ def main():
 
     if args.self_test:
         _self_test()
+        _trees_self_test()
         return
 
     out_dir = os.path.abspath(args.out)
