@@ -822,6 +822,10 @@ const links = [
       hero.activeMetric(),
       (key) => {
         hero.setMetric(key as MetricKey);
+        // Switching metric can change the effective default ramp (carbon uses impact,
+        // the others the perceptual default), so re-mark the active swatch unless the
+        // visitor has pinned one. palette is assigned just below and this fires on click.
+        palette.sync(hero.activeRamp());
         renderLegend();
       },
     );

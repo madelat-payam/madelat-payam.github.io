@@ -1,5 +1,7 @@
 import { Color } from 'three';
 
+import { type MetricKey } from './metrics';
+
 // Color ramps for the building metric. These four perceptually-uniform maps
 // (magma, inferno, turbo, viridis) are sampled from matplotlib so contrast is
 // even across the range; each is stored as [position, [r, g, b]] stops.
@@ -82,10 +84,29 @@ const RAMPS = {
     [0.9375, [0.846, 0.887, 0.1]],
     [1.0, [0.993, 0.906, 0.144]],
   ] as Stops,
+  // Green through yellow to red, low to high: the intuitive impact scale for embodied
+  // carbon, where green reads as the lighter footprint and red as the heavier. Unlike
+  // the four perceptual maps above, this one is meaningful only across its full range,
+  // so it is exempt from the per-theme window (see FULL_RANGE). Ranking is within a city,
+  // so the color reads as relative, lower to higher, exactly as the legend says. The
+  // stops are bright and warm-balanced: green holds the low third, then the ramp climbs
+  // through yellow and orange to red across the upper half, so the warm end is not a thin
+  // top slice. Brightened over the first balance, which read too green and too dark on
+  // the ink-navy background.
+  impact: [
+    [0.0, [0.235, 0.808, 0.451]],
+    [0.35, [0.545, 0.851, 0.353]],
+    [0.58, [0.949, 0.851, 0.310]],
+    [0.76, [0.984, 0.616, 0.235]],
+    [1.0, [0.945, 0.310, 0.243]],
+  ] as Stops,
 };
 
 export type RampName = keyof typeof RAMPS;
-export const RAMP_NAMES = Object.keys(RAMPS) as RampName[];
+// The palettes offered in the picker. impact is left out on purpose: it is the carbon
+// default (see defaultRamp), not a general-purpose colorway a visitor picks for height
+// or floor area, where a good/bad reading would be meaningless.
+export const RAMP_NAMES: RampName[] = ['magma', 'inferno', 'turbo', 'viridis'];
 export type ThemeName = 'dark' | 'light';
 
 // Default palette per theme: a warm, luminous ramp on the dark background and a
@@ -95,6 +116,18 @@ export const THEME_DEFAULT_RAMP: Record<ThemeName, RampName> = {
   dark: 'inferno',
   light: 'viridis',
 };
+
+// A metric can override the theme default with a ramp that carries its own meaning.
+// Carbon uses the green-to-red impact scale on both themes, since its reading is about
+// impact, not about matching the background. Metrics not listed fall back to the theme
+// default, and a visitor's explicit pick overrides either.
+const METRIC_DEFAULT_RAMP: Partial<Record<MetricKey, RampName>> = {
+  carbon: 'impact',
+};
+
+export function defaultRamp(metric: MetricKey, theme: ThemeName): RampName {
+  return METRIC_DEFAULT_RAMP[metric] ?? THEME_DEFAULT_RAMP[theme];
+}
 
 // A sequential ramp runs dark to light, so its dark end disappears on a dark
 // background and its light end disappears on a light one. Each theme therefore
@@ -111,7 +144,13 @@ const THEME_WINDOW: Record<ThemeName, [number, number]> = {
   light: [0.3, 0.85],
 };
 
-export function windowT(t: number, theme: ThemeName): number {
+// Ramps whose meaning depends on seeing their whole range, so the per-theme window is
+// skipped for them. A diverging good-to-bad scale windowed to a sub-range would drop one
+// of its ends, which is the opposite of the point.
+const FULL_RANGE: Set<RampName> = new Set<RampName>(['impact']);
+
+export function windowT(t: number, theme: ThemeName, ramp?: RampName): number {
+  if (ramp && FULL_RANGE.has(ramp)) return t;
   const [lo, hi] = THEME_WINDOW[theme];
   return lo + t * (hi - lo);
 }
@@ -125,7 +164,7 @@ export function rampCss(name: RampName, theme: ThemeName): string {
   const stops: string[] = [];
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    sampleRamp(name, windowT(t, theme), color);
+    sampleRamp(name, windowT(t, theme, name), color);
     const r = Math.round(color.r * 255);
     const g = Math.round(color.g * 255);
     const b = Math.round(color.b * 255);

@@ -1,16 +1,12 @@
 import {
-  BoxGeometry,
   Color,
   DirectionalLight,
   Fog,
   GridHelper,
   HemisphereLight,
-  InstancedMesh,
   LineBasicMaterial,
   Mesh,
-  MeshLambertMaterial,
-  Object3D,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
@@ -26,17 +22,16 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 
-import { loadCities, GEOM_STRIDE, WORLD_RADIUS, type MetricInfo } from './cityData';
+import { loadCities, WORLD_RADIUS, type MetricInfo } from './cityData';
 import {
-  sampleRamp,
-  windowT,
-  THEME_DEFAULT_RAMP,
+  defaultRamp,
   RAMP_NAMES,
   type RampName,
   type ThemeName,
 } from './colormaps';
 import { METRICS, DEFAULT_METRIC, type MetricKey } from './metrics';
 import { buildGroundLayers, GROUND_RENDER_LAYER, type GroundLayers } from './groundLayers';
+import { buildFootprintCities } from './footprints';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -56,12 +51,21 @@ const DARK_KEY = new Color(0xffe9cf);
 const LIGHT_SKY = new Color(0xfbf4ea);
 const LIGHT_GROUND = new Color(0xcdc7ba);
 const LIGHT_KEY = new Color(0xfff1d8);
+// Base light intensities, and how much brighter the dark theme is lit. The dark
+// background needs more light for the ramp colors to carry; the light theme is already
+// bright, so it stays at base. paintTheme lerps between the two by the theme mix.
+const HEMI_BASE = 0.5;
+const KEY_BASE = 0.6;
+const DARK_BRIGHT = 1.8;
 const GRID_SPAN = WORLD_RADIUS * 2.4;
 
-// The ground layers (roads, green, water) are extra draw and extra fetch. The mobile
-// pass will turn them off with this one switch: no build, no scene node, no per-frame
-// work. On by default for desktop.
-const SHOW_GROUND_LAYERS = true;
+// Phones take a lighter hero, gated on the same viewport width the page CSS uses for
+// its mobile layout: the footprint set is capped to the largest buildings and the
+// ground layers come off. The cap keeps the skyline-defining stock and drops the small
+// footprints that would not read at a phone's scale. It is a provisional value, meant
+// to be retuned against a real device in the mobile pass, not a measured limit.
+const MOBILE_BREAKPOINT = '(max-width: 760px)';
+const MOBILE_MAX_BUILDINGS = 6000;
 
 // One curated shot per city: the framing the camera passes through when that
 // city's box is centered. These are the approved stills from the render rounds.
@@ -129,6 +133,9 @@ export interface HeroController {
  */
 export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement): Promise<HeroController> {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // A phone gets the capped footprint set and no ground layers (see the constants
+  // above). Read once at build; the hero does not re-tier if the window is resized.
+  const isPhone = matchMedia(MOBILE_BREAKPOINT).matches;
 
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -141,26 +148,34 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
 
   const camera = new PerspectiveCamera(50, 1, 0.1, 400);
 
+  // cityData still loads the massing records, but only two of its outputs are used now:
+  // the per-city world scale (which lands both the footprints and the ground layers on
+  // the same ground) and the metric domains for the legend. The real geometry and color
+  // come from the footprint renderer below, so the boxed geom and rank arrays go undrawn.
   const data = await loadCities(import.meta.env.BASE_URL);
-  const count = data.count;
   const cities = data.geom.length;
 
-  const geometry = new BoxGeometry(1, 1, 1);
-  geometry.translate(0, 0.5, 0); // base sits on the ground plane
-  const mesh = new InstancedMesh(geometry, new MeshLambertMaterial(), count);
-  scene.add(mesh);
+  // The real extruded footprints, one merged mesh per city, driven by setMorph each
+  // frame and recolored by setColor on demand. On a phone the set is capped to the
+  // largest buildings. They stay on the default render layer, so they feed the GTAO pass.
+  const footprints = await buildFootprintCities(
+    import.meta.env.BASE_URL,
+    data.scale,
+    isPhone ? { maxBuildings: MOBILE_MAX_BUILDINGS } : {},
+  );
+  scene.add(footprints.object);
 
   // Lighting. A hemisphere ambient (sky above, ground below) gives every block a
   // top-to-bottom gradient so forms read without washing the color to white; a
   // raking key stands in for the sun; a weak counter-fill keeps the shadowed sides
-  // from going dead; a soft shadow grounds the towers on the light theme; and ambient
+  // from going dead; a filtered shadow grounds the towers on the light theme; and ambient
   // occlusion darkens where forms meet, which is what carries the depth on the dark
   // theme, where a cast shadow on the near-black ground cannot. Light colors track
   // the theme in paintTheme.
-  const hemi = new HemisphereLight(0xffffff, 0xffffff, 0.5);
+  const hemi = new HemisphereLight(0xffffff, 0xffffff, HEMI_BASE);
   scene.add(hemi);
 
-  const key = new DirectionalLight(0xffffff, 0.6);
+  const key = new DirectionalLight(0xffffff, KEY_BASE);
   key.position.set(34, 44, 22);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -175,11 +190,13 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   scene.add(fill);
 
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  // three 0.185 deprecates PCFSoftShadowMap and silently renders PCFShadowMap in its
+  // place (logging a warning), so ask for PCFShadowMap directly: the result is identical
+  // and the console stays clean. Each footprint mesh sets its own cast/receive flags in
+  // footprints.ts, and carries a depth material so its cast shadow follows the sink.
+  renderer.shadowMap.type = PCFShadowMap;
 
-  // A near-invisible plane catches the soft shadow so the towers sit on something,
+  // A near-invisible plane catches the shadow so the towers sit on something,
   // while the scene keeps its floating look wherever no shadow falls.
   const shadowGround = new Mesh(new PlaneGeometry(GRID_SPAN * 1.6, GRID_SPAN * 1.6), new ShadowMaterial({ opacity: 0.33 }));
   shadowGround.rotation.x = -Math.PI / 2;
@@ -232,68 +249,33 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   // morph; paint tracks the theme. The visible camera has to see their render layer;
   // the AO clone above deliberately does not.
   let layers: GroundLayers | null = null;
-  if (SHOW_GROUND_LAYERS) {
+  if (!isPhone) {
     layers = await buildGroundLayers(import.meta.env.BASE_URL, data.scale);
     scene.add(layers.object);
     camera.layers.enable(GROUND_RENDER_LAYER);
   }
 
   let activeMetric: MetricKey = DEFAULT_METRIC;
-  // null means follow the theme default; a visitor's pick pins a ramp.
+  // null means follow the metric's default ramp for the current theme; a visitor's pick
+  // pins one ramp across every metric and theme until they change it.
   let userRamp: RampName | null = null;
-  const rampFor = (theme: ThemeName): RampName => userRamp ?? THEME_DEFAULT_RAMP[theme];
+  // Carbon defaults to the green-to-red impact ramp on both themes; height and floor
+  // area fall back to the theme's perceptual default. defaultRamp encodes that split.
+  const rampFor = (metric: MetricKey, theme: ThemeName): RampName =>
+    userRamp ?? defaultRamp(metric, theme);
 
-  const dummy = new Object3D();
-  const color = new Color();
-
-  // Write one city into the instance buffers for a scroll position p in
-  // [0, cities-1]. Buildings never slide from one layout to the next, which would
-  // make unrelated footprints cross and pile up; each block instead does a
-  // vertical sink-swap-rise in place. What makes the change read as smooth is
-  // that the blocks do NOT all do it at once. If they did, the whole city passed
-  // through zero height together and the frame went briefly empty (a black beat
-  // on the dark theme). Here each block's sink-swap-rise is delayed by how far it
-  // sits from the center, so the next city blooms out from the middle while the
-  // old one still stands at the edges. The scene is never empty. See waveProgress
-  // for the per-block timing and the two dials that shape it.
-  let lastApplied = -1;
-  function applyProgress(p: number): void {
-    const seg = Math.max(0, Math.min(cities - 2, Math.floor(p)));
-    const f = p - seg;
+  // The footprint renderer bakes per-building vertex colors, so color is set once per
+  // change instead of rewritten every frame the way the boxed hero did. A metric,
+  // palette, or theme change calls this; the scroll loop below does no color work.
+  function recolor(): void {
     const theme = themeName();
-    const ramp = rampFor(theme);
-    const oldGeom = data.geom[seg];
-    const newGeom = data.geom[seg + 1];
-    const oldT = data.metricT[activeMetric][seg];
-    const newT = data.metricT[activeMetric][seg + 1];
-    for (let i = 0; i < count; i++) {
-      const o = i * GEOM_STRIDE;
-      // The block's own transition progress, delayed by its radius. The phase is
-      // read from the outgoing city so it holds steady across this whole
-      // transition, whichever city the block is currently drawn from.
-      const fi = waveProgress(f, Math.hypot(oldGeom[o], oldGeom[o + 1]), i);
-      const g = fi < 0.5 ? oldGeom : newGeom;
-      const t = fi < 0.5 ? oldT : newT;
-      // Height eases to zero and back with cos squared (a soft bottom, no
-      // bounce); the footprint pinches to nothing only right around the block's
-      // own swap, so its plate never jumps visibly between the two layouts.
-      const env = Math.cos(Math.PI * fi) ** 2;
-      const foot = footprintEnv(fi);
-      dummy.position.set(g[o], 0, g[o + 1]);
-      dummy.rotation.set(0, g[o + 4], 0);
-      dummy.scale.set(
-        Math.max(g[o + 2] * foot, 0.001),
-        Math.max(g[o + 5] * env, 0.001),
-        Math.max(g[o + 3] * foot, 0.001),
-      );
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, sampleRamp(ramp, windowT(t[i], theme), color));
-    }
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    lastApplied = p;
+    footprints.setColor(activeMetric, rampFor(activeMetric, theme), theme);
   }
+
+  // A control or theme change does not move the scroll, so the reduced-motion path
+  // (which only draws on demand) needs a nudge to repaint. The live loop draws every
+  // frame and ignores this flag.
+  let staticDirty = false;
 
   // Camera state. camU is the damped position along the shot path. Unlike the
   // morph index it has no rest plateaus: the morph rests so a settled city sits
@@ -360,6 +342,10 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     hemi.groundColor.copy(DARK_GROUND).lerp(LIGHT_GROUND, mix);
     key.color.copy(DARK_KEY).lerp(LIGHT_KEY, mix);
     fill.color.copy(DARK_SKY).lerp(LIGHT_SKY, mix);
+    // Dark lit brighter than light so the ramp colors carry on the ink-navy background.
+    const litFactor = DARK_BRIGHT + (1 - DARK_BRIGHT) * mix;
+    hemi.intensity = HEMI_BASE * litFactor;
+    key.intensity = KEY_BASE * litFactor;
     layers?.paint(mix);
   }
 
@@ -377,15 +363,12 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   let targetTheme = readTheme();
   const onThemeChange = new MutationObserver(() => {
     targetTheme = readTheme();
-    repaint(); // theme changes the color window and possibly the default ramp
+    // A theme swaps the per-theme color window and can swap a metric's default ramp, so
+    // rebake the colors here; the eased background lerp is handled in the frame loop.
+    recolor();
+    staticDirty = true;
   });
   onThemeChange.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-  // A metric or palette change does not move the scroll, so force the next draw
-  // to rewrite the instance colors even when progress has not moved.
-  function repaint(): void {
-    lastApplied = -1;
-  }
 
   // Rhino-style view orbit: hold the right button and drag. Horizontal turns
   // the city, vertical raises or lowers the eye. The offsets persist until the
@@ -439,45 +422,53 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     if (dragMoved && orbitSurface(e.target)) e.preventDefault();
   });
 
+  // impact is offered as a fifth swatch even though colormaps keeps it out of the
+  // perceptual set: it is carbon's default, and surfacing it lets a visitor pin it, or
+  // pin a perceptual ramp over it, while the active swatch tracks the metric otherwise.
+  const pickerRamps: RampName[] = [...RAMP_NAMES, 'impact'];
+
   const controller: HeroController = {
     metrics: data.metrics,
     metricKeys: METRICS.map((m) => m.key),
-    rampNames: RAMP_NAMES,
+    rampNames: pickerRamps,
     activeMetric: () => activeMetric,
-    activeRamp: () => rampFor(themeName()),
+    activeRamp: () => rampFor(activeMetric, themeName()),
     setMetric: (metricKey) => {
       activeMetric = metricKey;
-      repaint();
+      recolor();
+      staticDirty = true;
     },
     setRamp: (name) => {
       userRamp = name;
-      repaint();
+      recolor();
+      staticDirty = true;
     },
   };
 
+  // The first color bake, before either path draws. Without it every building would
+  // render at the zeroed vertex color the renderer starts each geometry with.
+  recolor();
+
   if (reduce) {
-    // Calm, static view: the first city, fixed framing, no scroll-driven motion
-    // and no idle drift. The view orbit still works, because that motion is the
+    // Calm, static view: the first city settled, fixed framing, no scroll-driven
+    // motion and no idle drift. The view orbit still works, because that motion is the
     // visitor's own hand. Metric, palette, and theme changes apply immediately.
     const renderStatic = (): void => {
-      if (lastApplied < 0) applyProgress(0);
+      footprints.setMorph(0);
       layers?.setMorph(0);
       paintTheme(readTheme());
       placeCamera(cameraShot(0, 0), 0, 0, true);
       syncAoCamera();
       camDirty = false;
+      staticDirty = false;
       draw();
     };
     renderStatic();
     addEventListener('resize', renderStatic);
-    new MutationObserver(renderStatic).observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
-    });
-    // The controllers set lastApplied = -1 and the orbit sets camDirty; a light
-    // loop turns either into a redraw.
+    // A control change flips staticDirty and the theme observer above also rebakes
+    // color; the orbit sets camDirty. A light loop turns either into a redraw.
     const tick = (): void => {
-      if (lastApplied < 0 || camDirty) renderStatic();
+      if (staticDirty || camDirty) renderStatic();
       requestAnimationFrame(tick);
     };
     tick();
@@ -550,10 +541,10 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     // between boxes. current trails the target so scroll jitter never snaps.
     const target = morphFromAnchors(scroll.progress, anchors);
     current += (target - current) * 0.1;
-    if (lastApplied < 0 || Math.abs(current - lastApplied) > 0.002) {
-      applyProgress(current);
-      layers?.setMorph(current);
-    }
+    // setMorph only sets two uniforms and toggles visibility on the one or two live
+    // cities, so it is cheap enough to drive unconditionally every frame.
+    footprints.setMorph(current);
+    layers?.setMorph(current);
 
     const sec = performance.now() / 1000;
     camU += (camPathFromAnchors(scroll.progress, anchors) - camU) * 0.06;
@@ -651,41 +642,6 @@ function camPathFromAnchors(s: number, anchors: Anchor[]): number {
     return a.city + (b.city - a.city) * ((s - a.p) / (b.p - a.p));
   }
   return last.city;
-}
-
-// Footprint size across a transition. Full for most of a block's own morph, so
-// it reads as sinking straight down, and eased to nothing only within PINCH of
-// its swap at fi = 0.5, which hides the instant its layout changes. PINCH is a
-// half-width in morph units; smaller keeps footprints full longer.
-const PINCH = 0.1;
-function footprintEnv(fi: number): number {
-  return smoother(Math.min(1, Math.abs(fi - 0.5) / PINCH));
-}
-
-// Per-block transition progress for the wave. A block's own sink-swap-rise takes
-// WAVE_WIDTH of the whole transition; the remaining time staggers the start by
-// radius, so the block at the center changes first and the one at WAVE_RADIUS
-// changes last. WAVE_JITTER scatters each block's start a little off that clean
-// radius, so the moving front reads as a soft organic band rather than a hard
-// ring. Because only a band is ever mid-change, the core and the edge always
-// stand: the whole city never disappears and the frame never blanks. f is the
-// transition progress in [0,1]; radius is the block's distance from center in
-// world units; i is its index, used only for a stable per-block offset.
-const WAVE_WIDTH = 0.5;
-const WAVE_RADIUS = WORLD_RADIUS;
-const WAVE_JITTER = 0.35;
-function waveProgress(f: number, radius: number, i: number): number {
-  const radial = Math.min(1, radius / WAVE_RADIUS);
-  const phase = Math.max(0, Math.min(1, radial + (hash01(i) - 0.5) * WAVE_JITTER));
-  return Math.max(0, Math.min(1, (f - phase * (1 - WAVE_WIDTH)) / WAVE_WIDTH));
-}
-
-// A stable pseudo-random value in [0,1) from an integer index, for the wave
-// jitter. The usual sine-hash: good enough to scatter start times, and it needs
-// no state or table.
-function hash01(i: number): number {
-  const x = Math.sin(i * 127.1) * 43758.5453;
-  return x - Math.floor(x);
 }
 
 // Perlin's smootherstep: zero first and second derivatives at both ends, so a
