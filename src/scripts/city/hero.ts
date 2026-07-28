@@ -32,6 +32,7 @@ import {
 import { METRICS, DEFAULT_METRIC, type MetricKey } from './metrics';
 import { buildGroundLayers, GROUND_RENDER_LAYER, type GroundLayers } from './groundLayers';
 import { buildFootprintCities } from './footprints';
+import { buildTreeCities, type TreeCities } from './trees';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -244,14 +245,20 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
   gridMaterial.opacity = 0.5;
   scene.add(grid);
 
-  // The road/green/water layers for every city, drawn flat under the massing at each
-  // city's own world scale. setMorph cross-fades the resting city's ground with the
-  // morph; paint tracks the theme. The visible camera has to see their render layer;
-  // the AO clone above deliberately does not.
+  // The road/green/water layers and the tree canopies for every city, one drawn flat
+  // and one instanced, both on the ground at each city's own world scale. Both are
+  // desktop only: they ride the ground render layer, so the visible camera has to see
+  // that layer while the AO clone above deliberately does not, which keeps the flat
+  // ground and the instanced canopies out of the occlusion buffer. The mobile pass drops
+  // them with the ground the same way it caps the footprints. Their setMorph and paint
+  // are driven below, right beside the footprints.
   let layers: GroundLayers | null = null;
+  let trees: TreeCities | null = null;
   if (!isPhone) {
     layers = await buildGroundLayers(import.meta.env.BASE_URL, data.scale);
     scene.add(layers.object);
+    trees = await buildTreeCities(import.meta.env.BASE_URL, data.scale);
+    scene.add(trees.object);
     camera.layers.enable(GROUND_RENDER_LAYER);
   }
 
@@ -347,6 +354,7 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     hemi.intensity = HEMI_BASE * litFactor;
     key.intensity = KEY_BASE * litFactor;
     layers?.paint(mix);
+    trees?.paint(mix);
   }
 
   function resize(): void {
@@ -455,6 +463,7 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     // visitor's own hand. Metric, palette, and theme changes apply immediately.
     const renderStatic = (): void => {
       footprints.setMorph(0);
+      trees?.setMorph(0);
       layers?.setMorph(0);
       paintTheme(readTheme());
       placeCamera(cameraShot(0, 0), 0, 0, true);
@@ -544,6 +553,7 @@ export async function initHero(canvas: HTMLCanvasElement, content: HTMLElement):
     // setMorph only sets two uniforms and toggles visibility on the one or two live
     // cities, so it is cheap enough to drive unconditionally every frame.
     footprints.setMorph(current);
+    trees?.setMorph(current);
     layers?.setMorph(current);
 
     const sec = performance.now() / 1000;
